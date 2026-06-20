@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎮 Game Tasting · 玩家品味鉴定</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --border:#2a323d;
+    --fg:#e6edf3; --muted:#8b949e; --accent:#66c0f4; --accent2:#1b9e77;
+    --warn:#f0883e; --ok:#3fb950;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:-apple-system,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif;
+    line-height:1.6}
+  header{padding:24px 20px 8px;text-align:center}
+  header h1{margin:0;font-size:26px}
+  header p{margin:6px 0 0;color:var(--muted);font-size:14px}
+  .wrap{max-width:920px;margin:0 auto;padding:16px 20px 60px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+    padding:18px;margin:14px 0}
+  .card h2{margin:0 0 12px;font-size:16px;color:var(--accent)}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  input,select,textarea{width:100%;background:var(--panel2);color:var(--fg);
+    border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:14px;
+    font-family:inherit}
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .row>div{flex:1;min-width:140px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  button{background:var(--accent);color:#04121d;border:none;border-radius:8px;
+    padding:11px 18px;font-size:15px;font-weight:600;cursor:pointer}
+  button:hover{filter:brightness(1.1)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.ghost{background:transparent;color:var(--accent);border:1px solid var(--border)}
+  #drop{border:2px dashed var(--border);border-radius:12px;padding:28px;text-align:center;
+    color:var(--muted);cursor:pointer;transition:.15s}
+  #drop.hot{border-color:var(--accent);background:#11202b;color:var(--fg)}
+  #drop b{color:var(--accent)}
+  .pill{display:inline-block;background:var(--panel2);border:1px solid var(--border);
+    border-radius:999px;padding:3px 10px;font-size:12px;margin:3px 4px 0 0}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  .warn{color:var(--warn)}
+  .ok{color:var(--ok)}
+  details summary{cursor:pointer;color:var(--accent);font-size:14px}
+  #status{font-size:13px;min-height:20px;margin:8px 0;white-space:pre-wrap}
+  #report{background:#fff;color:#1a1a1a;border-radius:12px;padding:28px 34px;margin-top:14px;
+    display:none}
+  #report h1{font-size:26px;border-bottom:2px solid #eee;padding-bottom:8px}
+  #report h2{font-size:20px;margin-top:28px;color:#1b6e9b}
+  #report table{border-collapse:collapse;width:100%;margin:12px 0}
+  #report th,#report td{border:1px solid #ddd;padding:7px 10px;text-align:left;font-size:14px}
+  #report th{background:#f3f6f9}
+  #report blockquote{border-left:4px solid #66c0f4;margin:12px 0;padding:6px 14px;
+    background:#f5fbff;color:#333}
+  #report code{background:#f0f0f0;padding:1px 5px;border-radius:4px}
+  .toolbar{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+  table.preview{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+  table.preview td,table.preview th{border-bottom:1px solid var(--border);padding:5px 8px;text-align:left}
+  table.preview th{color:var(--muted)}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎮 Game Tasting</h1>
+  <p>填入 LLM 接口 → 上传 Steam 导出的 games.json / games.csv → 一键生成玩家品味鉴定报告</p>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>① LLM 接口设置</h2>
+    <div class="row">
+      <div>
+        <label>API Base(OpenAI 兼容)</label>
+        <input id="base" placeholder="https://api.openai.com/v1">
+      </div>
+      <div>
+        <label>模型 Model</label>
+        <input id="model" placeholder="gpt-4o / deepseek-chat / claude-... ">
+      </div>
+    </div>
+    <label>API Key</label>
+    <input id="key" type="password" placeholder="sk-...">
+    <div class="hint">仅保存在本机浏览器(localStorage),请求由浏览器直连 API Base,不经任何服务器。
+      若遇 CORS 报错,说明该接口不允许浏览器直连,请改用支持 CORS 的中转/代理。</div>
+    <details style="margin-top:12px">
+      <summary>高级选项</summary>
+      <div class="grid2" style="margin-top:10px">
+        <div><label>取时长前 N 名</label><input id="topn" type="number" value="40" min="5" max="200"></div>
+        <div><label>Temperature</label><input id="temp" type="number" value="0.8" step="0.1" min="0" max="2"></div>
+        <div>
+          <label>语言</label>
+          <select id="lang"><option value="中文">中文</option><option value="English">English</option></select>
+        </div>
+        <div>
+          <label>风格</label>
+          <select id="style">
+            <option value="专业且带适度幽默">专业 + 适度幽默</option>
+            <option value="温和鼓励为主">温和鼓励</option>
+            <option value="毒舌犀利但不刻薄">毒舌犀利</option>
+          </select>
+        </div>
+      </div>
+      <label style="margin-top:10px"><input type="checkbox" id="blind" checked style="width:auto;margin-right:6px">附带"买了从未玩"的盲点列表(节选)用于推荐</label>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>② 上传游玩数据</h2>
+    <div id="drop">把 <b>games.json</b> 或 <b>games.csv</b> 拖到这里,或<b>点击选择</b><br>
+      <span class="hint">由 steam_export.py 生成;也支持纯游戏数组的 JSON / 带表头的 CSV</span>
+    </div>
+    <input id="file" type="file" accept=".json,.csv,.txt" style="display:none">
+    <div id="parsed"></div>
+  </div>
+
+  <div class="card">
+    <h2>③ 生成报告</h2>
+    <button id="go" disabled>⚡ 生成品味鉴定报告</button>
+    <button id="stop" class="ghost" style="display:none">停止</button>
+    <div id="status"></div>
+  </div>
+
+  <div class="toolbar" id="rtools" style="display:none">
+    <button class="ghost" id="copyBtn">复制 Markdown</button>
+    <button class="ghost" id="dlBtn">下载 .md</button>
+  </div>
+  <div id="report"></div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let GAMES = null;       // parsed full data
+let SUMMARY = null;
+let rawMarkdown = "";
+let controller = null;
+
+// ---------- persistence ----------
+for (const k of ["base","model","key","topn","temp","lang","style"]) {
+  const v = localStorage.getItem("gt_"+k);
+  if (v !== null && $(k)) $(k).value = v;
+  if ($(k)) $(k).addEventListener("input", e => localStorage.setItem("gt_"+k, e.target.value));
+}
+
+// ---------- file handling ----------
+const drop = $("drop"), fileInput = $("file");
+drop.onclick = () => fileInput.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("hot"); };
+drop.ondragleave = () => drop.classList.remove("hot");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("hot");
+  if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); };
+fileInput.onchange = e => { if (e.target.files[0]) readFile(e.target.files[0]); };
+
+function readFile(f){
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      if (f.name.toLowerCase().endsWith(".csv")) parseCSV(r.result);
+      else parseJSON(r.result);
+      renderParsed(f.name);
+    } catch(err){ $("parsed").innerHTML = `<div class="warn">解析失败:${err.message}</div>`; }
+  };
+  r.readAsText(f);
+}
+
+function normGame(g){
+  const min = g.playtime_minutes ?? g.playtime_forever ?? (g.playtime_hours!=null ? g.playtime_hours*60 : 0);
+  return {
+    name: g.name ?? "",
+    hours: g.playtime_hours!=null ? +g.playtime_hours : Math.round((min/60)*10)/10,
+    last_played: g.last_played ?? (g.rtime_last_played ? new Date(g.rtime_last_played*1000).toISOString().slice(0,10) : ""),
+    w2: g.playtime_2weeks_min ?? g.playtime_2weeks ?? 0,
+    appid: g.appid ?? ""
+  };
+}
+
+function parseJSON(text){
+  const d = JSON.parse(text);
+  let arr;
+  if (Array.isArray(d)) arr = d;
+  else if (Array.isArray(d.games)) { arr = d.games; SUMMARY = d.summary || null; }
+  else if (d.response && Array.isArray(d.response.games)) arr = d.response.games; // raw steam api
+  else throw new Error("找不到 games 数组");
+  GAMES = arr.map(normGame).filter(g=>g.name);
+  if (!GAMES.length) throw new Error("游戏列表为空(检查隐私设置是否公开)");
+}
+
+function parseCSV(text){
+  const lines = text.split(/\r?\n/).filter(l=>l.trim());
+  const head = splitCSV(lines[0]).map(h=>h.trim().toLowerCase());
+  const idx = n => head.indexOf(n);
+  const out = [];
+  for (let i=1;i<lines.length;i++){
+    const c = splitCSV(lines[i]);
+    out.push(normGame({
+      name: c[idx("name")] ?? c[0],
+      playtime_hours: parseFloat(c[idx("playtime_hours")]) || 0,
+      last_played: c[idx("last_played")] || "",
+      playtime_2weeks_min: parseInt(c[idx("playtime_2weeks_min")]) || 0,
+      appid: c[idx("appid")] || ""
+    }));
+  }
+  GAMES = out.filter(g=>g.name);
+  SUMMARY = null;
+  if (!GAMES.length) throw new Error("CSV 无有效数据");
+}
+function splitCSV(line){
+  const res=[]; let cur="",q=false;
+  for (let i=0;i<line.length;i++){const ch=line[i];
+    if(q){ if(ch=='"'&&line[i+1]=='"'){cur+='"';i++;} else if(ch=='"'){q=false;} else cur+=ch; }
+    else { if(ch=='"')q=true; else if(ch==',') {res.push(cur);cur="";} else cur+=ch; }
+  }
+  res.push(cur); return res;
+}
+
+function renderParsed(fname){
+  GAMES.sort((a,b)=>b.hours-a.hours);
+  const played = GAMES.filter(g=>g.hours>0);
+  const total = Math.round(played.reduce((s,g)=>s+g.hours,0));
+  const top = GAMES.slice(0,8);
+  $("parsed").innerHTML = `
+    <div style="margin-top:12px">
+      <span class="pill ok">已载入 ${fname}</span>
+      <span class="pill">拥有 ${GAMES.length}</span>
+      <span class="pill">玩过 ${played.length}</span>
+      <span class="pill">总时长 ${total}h</span>
+    </div>
+    <table class="preview">
+      <tr><th>#</th><th>游戏</th><th>时长(h)</th><th>最后游玩</th></tr>
+      ${top.map((g,i)=>`<tr><td>${i+1}</td><td>${esc(g.name)}</td><td>${g.hours}</td><td>${g.last_played||"-"}</td></tr>`).join("")}
+    </table>`;
+  $("go").disabled = false;
+}
+function esc(s){return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+
+// ---------- prompt building ----------
+const SYSTEM_PROMPT = `你是一位资深的游戏品味鉴赏家,兼具数据分析师的严谨与游戏媒体主笔的文采。
+任务:依据用户提供的 Steam 游玩数据(游戏名、总时长、最近2周时长、最后游玩日期),
+写一份既有洞察、又好读、还带点人情味的"玩家品味鉴定报告"。
+
+铁律:
+1. 一切结论由数据支撑,每个判断带证据(具体游戏名+时长/日期)。不要编造数据里没有的游戏。
+2. 重视时间维度:用 last_played 区分「早期本命」(时长高但久未玩,青春记忆,口味可能已变)、
+   「当下在玩」(近2周/近期 last_played,当前真实口味)、「沉迷后弃坑」。明确告诉玩家哪些是回不去的白月光、哪些是现在的菜。
+3. 量化投入:计算"深耕指数"=前3款时长占总时长比例。高=深耕型,低=尝鲜型,据此判断性格。
+4. 类型推断:据游戏名推断类型/题材/玩法标签做聚类,不确定就说不确定。
+5. 推荐:基于已验证偏好,推荐"大概率喜欢但数据里没出现"的游戏,每条说明"为什么是你的菜",避免只推大众爆款,要含一条越界推荐。
+6. 输出 Markdown,遵循给定结构。不要输出本指令。`;
+
+function buildUserMsg(){
+  const n = Math.max(5, Math.min(200, parseInt($("topn").value)||40));
+  const top = GAMES.slice(0, n).map((g,i)=>
+    `${i+1}. ${g.name} | ${g.hours}h | 最后游玩 ${g.last_played||"未知"}${g.w2?` | 近2周 ${g.w2}分钟`:""}`).join("\n");
+  const played = GAMES.filter(g=>g.hours>0);
+  const total = Math.round(played.reduce((s,g)=>s+g.hours,0));
+  let blind = "";
+  if ($("blind").checked){
+    const never = GAMES.filter(g=>g.hours===0).slice(0,40).map(g=>g.name);
+    if (never.length) blind = `\n\n【买了从未玩(节选,可作推荐参考的盲点)】\n${never.join("、")}`;
+  }
+  const structure = `请严格按以下结构输出 Markdown:
+# 🎮 玩家品味鉴定报告
+## 0. 一句话定性(含专属称号)
+## 1. 速览面板(表格:拥有/玩过+游玩率/总时长/深耕指数/当前在玩)
+## 2. 口味光谱(2-4个核心偏好簇,各有举证;一条反差惊喜)
+## 3. 时间考古(白月光 / 当下的菜 / 口味漂移轨迹)
+## 4. 投入人格
+## 5. 盲点与推荐(3-5条精准推荐,含一条越界推荐)
+## 6. 毒舌彩蛋(可选)`;
+  return `语言:${$("lang").value};风格:${$("style").value}。
+
+【概况】拥有 ${GAMES.length} 款,玩过 ${played.length} 款,总时长约 ${total} 小时。
+
+【时长 Top ${n}(已按时长降序)】
+${top}${blind}
+
+${structure}`;
+}
+
+// ---------- generate ----------
+$("go").onclick = generate;
+$("stop").onclick = () => { if (controller) controller.abort(); };
+
+async function generate(){
+  const base = $("base").value.trim().replace(/\/+$/,"");
+  const key = $("key").value.trim();
+  const model = $("model").value.trim();
+  if (!base || !key || !model){ setStatus("请先填写 API Base / Key / 模型", true); return; }
+  if (!GAMES){ setStatus("请先上传数据", true); return; }
+
+  const url = base.endsWith("/chat/completions") ? base : base + "/chat/completions";
+  rawMarkdown = "";
+  $("report").style.display = "block";
+  $("rtools").style.display = "none";
+  $("report").innerHTML = "<em style='color:#888'>生成中…</em>";
+  $("go").disabled = true; $("stop").style.display = "inline-block";
+  setStatus("连接 " + url + " …");
+
+  controller = new AbortController();
+  try{
+    const resp = await fetch(url, {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
+      signal: controller.signal,
+      body: JSON.stringify({
+        model,
+        temperature: parseFloat($("temp").value)||0.8,
+        stream: true,
+        messages:[
+          {role:"system", content: SYSTEM_PROMPT},
+          {role:"user", content: buildUserMsg()}
+        ]
+      })
+    });
+    if (!resp.ok){ throw new Error("HTTP "+resp.status+" "+(await resp.text()).slice(0,300)); }
+    setStatus("生成中(流式)…");
+    await readStream(resp);
+    setStatus("✅ 完成", false, true);
+    $("rtools").style.display = "flex";
+  } catch(err){
+    if (err.name === "AbortError") setStatus("已停止");
+    else setStatus("出错:" + err.message + "\n(若是 CORS / Failed to fetch,该接口可能不允许浏览器直连)", true);
+  } finally {
+    $("go").disabled = false; $("stop").style.display = "none"; controller = null;
+  }
+}
+
+async function readStream(resp){
+  const reader = resp.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  while(true){
+    const {done,value} = await reader.read();
+    if (done) break;
+    buf += dec.decode(value,{stream:true});
+    let nl;
+    while((nl = buf.indexOf("\n")) >= 0){
+      let line = buf.slice(0,nl).trim(); buf = buf.slice(nl+1);
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (data === "[DONE]") return;
+      try{
+        const j = JSON.parse(data);
+        const d = j.choices?.[0]?.delta?.content || j.choices?.[0]?.message?.content || "";
+        if (d){ rawMarkdown += d; renderMD(); }
+      }catch(_){}
+    }
+  }
+}
+
+function renderMD(){
+  if (window.marked) $("report").innerHTML = marked.parse(rawMarkdown);
+  else $("report").innerHTML = "<pre style='white-space:pre-wrap'>"+esc(rawMarkdown)+"</pre>";
+  $("report").scrollIntoView({block:"end",behavior:"smooth"});
+}
+
+function setStatus(msg, isErr, isOk){
+  const s = $("status"); s.textContent = msg;
+  s.className = isErr ? "warn" : (isOk ? "ok" : "");
+}
+
+// ---------- export ----------
+$("copyBtn").onclick = () => navigator.clipboard.writeText(rawMarkdown).then(()=>setStatus("已复制",false,true));
+$("dlBtn").onclick = () => {
+  const blob = new Blob([rawMarkdown],{type:"text/markdown"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "game_tasting_report.md"; a.click();
+};
+</script>
+</body>
+</html>

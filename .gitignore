@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-ssr
+*.local
+*.tsbuildinfo
+.DS_Store
+
+# user data exports (don't commit personal playtime)
+games.json
+games.csv
+*.report.md
+
+# editor
+.vscode/*
+!.vscode/extensions.json
+.idea
