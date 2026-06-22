@@ -1,0 +1,205 @@
+# 开发者说明 · Steam Tasting
+
+面向贡献者与自托管者的技术文档:架构、数据流、本地开发、部署与安全。
+用户向使用说明见 [`README.md`](./README.md)。
+
+---
+
+## 1. 这个项目是什么
+
+把 Steam 玩家的游玩历史(游戏 / 时长 / 最后游玩时间)交给任意 OpenAI 兼容的 LLM,
+生成一份「玩家品味鉴定报告」。
+
+获取游玩数据有**两种途径**,前端对两者一视同仁(归一化成同一份 `Game[]`):
+
+1. **Steam 登录(推荐)** —— 用户点「用 Steam 登录」,经 Steam OpenID 认证后,
+   后端用**开发者的一个 Steam Web API Key** 自动拉取该用户的游戏库。用户零门槛。
+2. **上传文件(备选)** —— 用户自己跑 [`steam_export.py`](./steam_export.py),
+   拖入生成的 `games.json` / `games.csv`。纯静态即可用,无需后端。
+
+> LLM 调用始终在**浏览器里直连**用户填写的 API Base,Key 只存浏览器 localStorage,
+> 不经过我们的后端。后端只负责 Steam 认证与 Steam 数据代理。
+
+---
+
+## 2. 关于「OpenID 登录是否免去 API Key」——重要
+
+**不免。** 这是两个不同的东西,常被混淆:
+
+| | Steam OpenID 登录 | Steam Web API Key |
+|---|---|---|
+| 作用 | 身份认证,登录后只得到用户的 **SteamID64** | 读取游戏数据(`GetOwnedGames` 等) |
+| 能拿游戏数据吗 | ❌ 不能 | ✅ 必须用它 |
+
+所以集成 OpenID 后**仍然需要一个 Steam Web API Key**。区别在于**谁来出 key**:
+
+- 旧模式:每个用户各自申请 key、跑脚本。门槛高。
+- 现在:**开发者申请一个 key,放在后端环境变量里**,所有用户用 Steam 登录即可,
+  终端用户什么都不用申请。这才是集成 OpenID 的意义。
+
+### 为什么必须有后端(GitHub Pages 不够)
+
+1. **CORS** —— Steam Web API 不带跨域响应头,浏览器无法直接 `fetch`,必须服务端转发。
+2. **密钥保密** —— API Key 不能进前端代码,否则会被任何人提取盗用。
+3. **OpenID 回调** —— 登录断言需要一个服务端回调地址来验证。
+
+GitHub Pages 是纯静态,跑不了后端,所以**登录功能只在自托管(Node 后端)下可用**;
+Pages 上只能用「上传文件」途径。
+
+---
+
+## 3. 架构与数据流
+
+```
+浏览器 (React/Vite SPA)
+  │
+  │  ① /api/auth/steam/login        ──▶  302 跳转到 Steam OpenID
+  │  ② 用户在 Steam 授权             ──▶  Steam 302 回 /api/auth/steam/return
+  │  ③ 后端验证断言 → 写签名 Cookie  ──▶  302 回站点首页
+  │  ④ GET /api/me  (带 Cookie)
+  │        └─ 后端用 server-side key 调 GetPlayerSummaries + GetOwnedGames
+  │           返回 { profile, games(已归一化), gamesPrivate }
+  │
+  └─ ⑤ 浏览器拿 games → 直连用户填写的 LLM /chat/completions(流式)→ 渲染报告
+```
+
+### OpenID 2.0 登录流程(`server/steam.js`)
+
+1. `buildLoginUrl(realm, returnTo)` 构造跳转 URL,`identity`/`claimed_id` 用
+   `identifier_select`(让用户自己选账号)。
+2. Steam 回调到 `return_to`,带一堆 `openid.*` 参数。
+3. `verifyAssertion(query)` 把这些参数原样回传给 Steam,并把 `openid.mode`
+   改成 `check_authentication`;Steam 回 `is_valid:true` 才算数(防伪造)。
+4. 从 `openid.claimed_id`(形如 `…/openid/id/7656119…`)正则提取 17 位 SteamID64。
+
+### 会话(`server/session.js`)
+
+无数据库。会话是一个**自包含的签名 Cookie**:`base64url(payload).HMAC-SHA256`,
+payload 为 `{ steamid, iat }`。读取时用 `timingSafeEqual` 校验签名 + 7 天过期检查。
+密钥来自 `SESSION_SECRET`。
+
+### 数据归一化
+
+后端 `getOwnedGames` 输出的字段刻意与 `steam_export.py` 一致
+(`playtime_hours` / `last_played` / `playtime_2weeks_min` / `appid`),
+因此前端 `src/lib/parse.ts` 的 `normGame` 能同时吃「API 数据」和「上传文件」。
+
+---
+
+## 4. 目录结构
+
+```
+server/                  # Node/Express 后端(纯 ESM JS,无需构建)
+  index.js               #   Express 应用:路由 + 生产环境托管 dist
+  steam.js               #   OpenID 验证 + Steam Web API 调用
+  session.js             #   签名 Cookie 会话
+src/                     # 前端(Vite + React + TS)
+  App.tsx                #   主界面 + 登录态
+  lib/api.ts             #   后端 API 客户端(/api/me、登录、登出)
+  lib/parse.ts           #   解析/归一化(normGame / normalizeGames / parseFile)
+  lib/llm.ts             #   OpenAI 兼容流式调用(浏览器直连)
+  lib/prompt.ts          #   System / User prompt 构建
+  lib/exporter.ts        #   复制 / 下载 / 分享
+  hooks/useLocalStorage.ts
+  types.ts  styles.css  vite-env.d.ts
+steam_export.py          # 备选途径:本地导出脚本(纯标准库)
+.env.example             # 后端环境变量模板
+vite.config.ts           # base 路径 + 开发期 /api 代理
+```
+
+---
+
+## 5. 本地开发
+
+需要 Node 18+(用到内置 `fetch`)与 pnpm。
+
+```bash
+pnpm install
+cp .env.example .env        # 填 STEAM_API_KEY 与 SESSION_SECRET
+```
+
+`.env` 关键项(完整说明见 `.env.example`):
+
+| 变量 | 说明 |
+|---|---|
+| `STEAM_API_KEY` | 开发者的 Steam Web API Key,见 https://steamcommunity.com/dev/apikey |
+| `SESSION_SECRET` | 长随机串,签 Cookie 用。`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `PORT` | 后端端口,默认 `8787` |
+| `PUBLIC_URL` | **浏览器实际访问到的后端基址**,用于拼 OpenID `realm`/`return_to`。开发期填 `http://localhost:5173`(走 Vite 代理) |
+| `FRONTEND_URL` | 登录成功后跳回的地址,默认 `/` |
+
+开两个终端:
+
+```bash
+pnpm server     # 后端 :8787
+pnpm dev        # 前端 :5173(已配置把 /api 代理到 :8787)
+```
+
+打开 http://localhost:5173 → 点「用 Steam 登录」。
+因为走 Vite 代理,浏览器看到的是**同源**(:5173),Cookie 与 OpenID 回调都正常工作。
+
+> 想换后端端口给前端代理:`VITE_DEV_API=http://localhost:9000 pnpm dev`。
+
+---
+
+## 6. 生产部署(自托管 Node)
+
+后端在检测到 `dist/` 时会**自己托管前端**,因此前后端同源、无 CORS、Cookie 简单。
+
+```bash
+pnpm build                  # 产出 dist/(base 默认 '/',匹配后端根路径托管)
+# .env 里 PUBLIC_URL 改成你的真实对外地址,例如 https://your-domain
+pnpm start                  # 或 node server/index.js
+```
+
+要点:
+
+- **`PUBLIC_URL` 必须是真实对外 URL**,且建议 HTTPS;为 `https://` 时 Cookie 自动带 `secure`。
+- 后端通常挂在反向代理(Nginx/Caddy)后面,已 `app.set('trust proxy', 1)`。
+  代理需透传 `X-Forwarded-Proto`,并把 `/` 与 `/api` 都转发到 Node。
+- 在 Steam 注册 API Key 时填写的 domain 仅作记录,OpenID 的信任域由 `realm`(=`PUBLIC_URL`)决定。
+
+### GitHub Pages(仅静态,无登录)
+
+仓库已带 `.github/workflows/deploy.yml`。Pages 上**没有后端**,只有「上传文件」途径可用。
+构建时用 `VITE_BASE` 指定子路径:
+
+```bash
+VITE_BASE=/steam-tasting/ pnpm build
+```
+
+(workflow 已设置该变量。)
+
+---
+
+## 7. API 一览(`/api`)
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/health` | 健康检查 `{ok:true}` |
+| GET | `/api/auth/steam/login` | 302 跳转 Steam OpenID |
+| GET | `/api/auth/steam/return` | OpenID 回调,验证后写 Cookie 并跳回前端 |
+| GET | `/api/me` | 当前用户 `{profile, games, gamesPrivate}`;未登录 401 |
+| POST | `/api/logout` | 清除会话 Cookie |
+
+`gamesPrivate: true` 表示登录成功但游戏库为空 —— 通常是用户的「游戏详情」隐私非公开。
+前端会提示用户改隐私后刷新。
+
+---
+
+## 8. 安全与隐私
+
+- **API Key 只在后端**(环境变量),永不下发到浏览器。`.env` 已被 `.gitignore` 忽略。
+- 会话 Cookie 为 `httpOnly` + `sameSite=lax`,HTTPS 下 `secure`;签名防篡改,7 天过期。
+- **LLM 的 Key 不经过后端** —— 由浏览器直连用户填写的 API Base,只存 localStorage。
+- 个人游玩数据(`games.json` / `games.csv` / `*.report.md`)与 `.env` 均在 `.gitignore` 中。
+- 我们不持久化任何用户数据;`/api/me` 每次实时向 Steam 拉取。
+
+---
+
+## 9. 常见问题
+
+- **登录后报「读不到游戏库」** —— 用户的「游戏详情」隐私不是公开。开发者的 key 也无法越过他人隐私设置。
+- **`Failed to fetch` / CORS(生成报告时)** —— 这是 LLM 接口侧的跨域限制,与本后端无关;换支持 CORS 的中转或自建代理。
+- **登录后跳回却仍是未登录** —— 多半是 `PUBLIC_URL` 与浏览器实际访问的源不一致,导致 Cookie 写在了别的域;核对 `PUBLIC_URL`。
+- **改了后端端口** —— 同步更新 `PORT` 与(开发期)`VITE_DEV_API`。

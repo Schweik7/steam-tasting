@@ -5,6 +5,11 @@ dist-ssr
 *.tsbuildinfo
 .DS_Store
 
+# secrets (backend env: Steam API key, session secret)
+.env
+.env.*
+!.env.example
+
 # user data exports (don't commit personal playtime)
 games.json
 games.csv

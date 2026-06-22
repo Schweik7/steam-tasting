@@ -28,7 +28,11 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Pages is static (no backend): only the file-upload path works here.
+      # Login/OpenID requires self-hosting the Node backend (see DEVELOPMENT.md).
       - run: pnpm build
+        env:
+          VITE_BASE: /steam-tasting/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

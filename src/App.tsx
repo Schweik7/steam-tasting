@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { Game, Settings } from './types'
-import { parseFile } from './lib/parse'
+import type { Game, Profile, Settings } from './types'
+import { normalizeGames, parseFile } from './lib/parse'
 import { streamTastingReport } from './lib/llm'
+import { fetchMe, logout, steamLoginUrl } from './lib/api'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import {
   copyMarkdown,
@@ -34,12 +35,43 @@ export default function App() {
   })
   const [busy, setBusy] = useState(false)
   const [drag, setDrag] = useState(false)
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [authChecked, setAuthChecked] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const reportRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) =>
     setSettings((s) => ({ ...s, [k]: v }))
+
+  // On load, ask the backend whether we're already logged in via Steam.
+  useEffect(() => {
+    fetchMe()
+      .then((me) => {
+        if (!me) return
+        setProfile(me.profile)
+        if (me.gamesPrivate) {
+          setStatus({
+            msg: '已登录,但读不到游戏库。请把 Steam 资料的「游戏详情」隐私设为公开后刷新。',
+            kind: 'err',
+          })
+        } else {
+          setGames(normalizeGames(me.games))
+          setSource('Steam:' + me.profile.name)
+        }
+      })
+      .catch((e: Error) => setStatus({ msg: '后端连接失败:' + e.message, kind: 'err' }))
+      .finally(() => setAuthChecked(true))
+  }, [])
+
+  async function onLogout() {
+    await logout()
+    setProfile(null)
+    setGames(null)
+    setSource('')
+    setReport('')
+    setStatus({ msg: '已退出登录', kind: 'info' })
+  }
 
   const stats = useMemo(() => {
     if (!games) return null
@@ -113,7 +145,7 @@ export default function App() {
     <>
       <header>
         <h1>🎮 Game Tasting</h1>
-        <p>填入 LLM 接口 → 上传 Steam 导出的 games.json / games.csv → 一键生成玩家品味鉴定报告</p>
+        <p>用 Steam 登录(或上传导出文件) → 填 LLM 接口 → 一键生成玩家品味鉴定报告</p>
       </header>
 
       <div className="wrap">
@@ -204,9 +236,36 @@ export default function App() {
           </details>
         </section>
 
-        {/* ② upload */}
+        {/* ② data source: Steam login (primary) or file upload (fallback) */}
         <section className="card">
-          <h2>② 上传游玩数据</h2>
+          <h2>② 获取你的游玩数据</h2>
+
+          {profile ? (
+            <div className="profile">
+              {profile.avatar && <img src={profile.avatar} alt="" className="avatar" />}
+              <div className="profile-meta">
+                <b>{profile.name}</b>
+                <span className="hint">SteamID {profile.steamid}</span>
+              </div>
+              <button className="ghost" onClick={onLogout}>
+                退出登录
+              </button>
+            </div>
+          ) : (
+            <div className="login">
+              <a className="steam-login" href={steamLoginUrl()}>
+                🎮 用 Steam 登录(自动拉取你的游戏库)
+              </a>
+              <p className="hint">
+                {authChecked
+                  ? '点击后跳转 Steam 授权,登录即自动读取你的游戏与时长,无需任何 API Key。需把资料的「游戏详情」隐私设为公开。'
+                  : '正在检测登录状态…'}
+              </p>
+            </div>
+          )}
+
+          <details>
+            <summary>或:上传 steam_export.py 导出的文件</summary>
           <div
             className={'drop' + (drag ? ' hot' : '')}
             onClick={() => fileRef.current?.click()}
@@ -232,6 +291,7 @@ export default function App() {
             hidden
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
           />
+          </details>
           {stats && (
             <div className="parsed">
               <div>

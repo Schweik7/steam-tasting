@@ -11,6 +11,19 @@ export interface ParseResult {
   source: string
 }
 
+export interface Profile {
+  steamid: string
+  name: string
+  avatar: string
+  profileurl: string
+}
+
+export interface MeResponse {
+  profile: Profile
+  games: Record<string, unknown>[]
+  gamesPrivate: boolean
+}
+
 export interface Settings {
   base: string
   model: string

@@ -4,7 +4,17 @@
 生成一份有洞察、好读、带点人情味的**玩家品味鉴定报告**:口味聚类、时间考古(白月光 vs 当下在玩)、
 投入人格、以及"你大概率会喜欢但还没碰"的精准推荐。
 
-> 全程本地运行,数据不出本机。API Key 仅存在浏览器 localStorage,请求由浏览器直连你填写的 API Base。
+> LLM 的 Key 仅存在浏览器 localStorage,请求由浏览器直连你填写的 API Base,不经任何服务器。
+
+获取游玩数据有两种途径:
+
+- **🎮 用 Steam 登录(推荐)**:部署带后端的版本后,用户点「用 Steam 登录」即可自动拉取自己的游戏库,
+  **无需自己申请任何 Key**。开发者只需在后端配置**一个** Steam Web API Key。需自托管 Node 后端,见
+  [`DEVELOPMENT.md`](./DEVELOPMENT.md)。
+- **📄 上传导出文件**:用下面的 `steam_export.py` 自己导出 `games.json` / `games.csv` 再拖入。纯静态即可用。
+
+> ⚠️ 注意:Steam OpenID 登录只做**身份认证**(拿到 SteamID),**不能替代 API Key** —— 读取游戏数据仍需
+> 一个 Steam Web API Key。区别只是「开发者出一个 key」还是「每个用户各自出 key」。详见 `DEVELOPMENT.md` 第 2 节。
 
 ---
 
@@ -77,19 +87,25 @@ pnpm build && pnpm preview
 ## 📁 项目结构
 
 ```
-steam_export.py            # Steam 数据导出脚本(无第三方依赖)
+server/                    # Node/Express 后端(Steam 登录 + Steam API 代理)
+  index.js  steam.js  session.js
+steam_export.py            # 备选途径:Steam 数据导出脚本(无第三方依赖)
 game_tasting_template.md   # 报告模板 + System Prompt
 legacy-standalone.html     # 早期单文件版(无需构建,留作备份)
 index.html                 # Vite 入口
 src/
-  App.tsx                  # 主界面
+  App.tsx                  # 主界面 + 登录态
+  lib/api.ts               # 后端 API 客户端
   lib/parse.ts             # JSON/CSV 解析与归一化
   lib/llm.ts               # OpenAI 兼容流式调用
   lib/prompt.ts            # System / User prompt 构建
   lib/exporter.ts          # 复制 / 下载 / 分享
   hooks/useLocalStorage.ts
   types.ts  styles.css
+.env.example               # 后端环境变量模板
 ```
+
+> 自托管「Steam 登录」版本的完整步骤(环境变量、部署、安全)见 [`DEVELOPMENT.md`](./DEVELOPMENT.md)。
 
 ---
 

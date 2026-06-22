@@ -28,6 +28,13 @@ function normGame(g: Record<string, unknown>): Game {
   }
 }
 
+/** Normalize an already-parsed array of game records (e.g. from /api/me). */
+export function normalizeGames(arr: Record<string, unknown>[]): Game[] {
+  const games = arr.map(normGame).filter((g) => g.name)
+  games.sort((a, b) => b.hours - a.hours)
+  return games
+}
+
 export function parseJSON(text: string): Game[] {
   const d = JSON.parse(text)
   let arr: Record<string, unknown>[]
