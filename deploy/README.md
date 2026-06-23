@@ -1,6 +1,6 @@
 # 部署手册(自托管 · 阿里云 39.99.245.245)
 
-两个阶段:**① 纯 IP + HTTP** 先跑通 → 确认无误后 **② 切域名 `game-tasting.vrventures.cn`(可选上 HTTPS)**。
+线上地址:**https://game-tasting.psyventures.cn**(nginx + Let's Encrypt)。
 
 架构:`nginx :80` 反向代理 → `uvicorn 127.0.0.1:8787`(后端同时托管前端 `dist/`)。
 
@@ -74,15 +74,22 @@ systemctl restart steam-tasting
 
 ---
 
-## 阶段②:切到域名 game-tasting.vrventures.cn
+## 阶段②:域名 + HTTPS(已上线 game-tasting.psyventures.cn)
 
-1. DNS:`game-tasting.vrventures.cn` A 记录 → `39.99.245.245`(大陆服务器域名需已备案)。
-2. 改 `.env`:`PUBLIC_URL=http://game-tasting.vrventures.cn`,`systemctl restart steam-tasting`。
-3. 改 nginx `server_name` 为该域名,`nginx -t && systemctl reload nginx`。
-4. (可选)上 HTTPS:
+1. DNS:`game-tasting.psyventures.cn` A 记录 → `39.99.245.245`(大陆服务器域名需已备案)。
+2. `.env`:`PUBLIC_URL=https://game-tasting.psyventures.cn`,`systemctl restart steam-tasting`。
+3. nginx `server_name` 设为该域名;先用 80 端口跑通 ACME 验证目录。
+4. 用 acme.sh 签证书(本机 certbot 已损坏,统一用 acme.sh):
 
 ```bash
-apt-get install -y certbot python3-certbot-nginx
-certbot --nginx -d game-tasting.vrventures.cn
-# 成功后把 .env 的 PUBLIC_URL 改成 https://game-tasting.vrventures.cn 并重启后端
+D=game-tasting.psyventures.cn
+~/.acme.sh/acme.sh --issue -d $D -w /var/www/html --server letsencrypt --keylength ec-256
+mkdir -p /etc/nginx/ssl/$D
+~/.acme.sh/acme.sh --install-cert -d $D --ecc \
+  --key-file /etc/nginx/ssl/$D/key.pem \
+  --fullchain-file /etc/nginx/ssl/$D/fullchain.pem \
+  --reloadcmd "systemctl reload nginx"
 ```
+
+5. 把 `deploy/nginx.conf` 的 443 块指向 `/etc/nginx/ssl/$D/`,80 块做 ACME + 跳转 HTTPS,
+   `nginx -t && systemctl reload nginx`。acme.sh 会自动续期。
