@@ -7,12 +7,13 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/opt/steam-tasting
 # uv reads .env via python-dotenv from WorkingDirectory; it installs its own
-# Python, so no system venv is needed. Adjust the uv path if installed elsewhere.
-ExecStart=/root/.local/bin/uv run uvicorn server.main:app --host 127.0.0.1 --port 8787
+# Python, so no system venv is needed. Check `command -v uv` and adjust the
+# path below (commonly /usr/local/bin/uv or /root/.local/bin/uv).
+ExecStart=/usr/local/bin/uv run uvicorn server.main:app --host 127.0.0.1 --port 8787
 Restart=always
 RestartSec=3
-# Give the build/runtime a sane PATH (node/pnpm/uv).
-Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Give the runtime a sane PATH (uv, system tools).
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 
 [Install]
 WantedBy=multi-user.target
