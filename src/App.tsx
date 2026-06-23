@@ -123,7 +123,7 @@ export default function App() {
       if (err.name === 'AbortError') setStatus({ msg: '已停止', kind: 'info' })
       else
         setStatus({
-          msg: '出错:' + err.message + '\n(若是 CORS / Failed to fetch,该接口可能不允许浏览器直连)',
+          msg: '出错:' + err.message,
           kind: 'err',
         })
     } finally {
@@ -178,8 +178,8 @@ export default function App() {
             placeholder="sk-..."
           />
           <p className="hint">
-            仅保存在本机浏览器(localStorage),请求由浏览器直连 API Base,不经任何服务器。
-            若遇 CORS 报错,说明该接口不允许浏览器直连,请改用支持 CORS 的中转/代理。
+            保存在本机浏览器(localStorage)。生成报告时,这些设置会发给本应用后端,
+            由后端构建提示词并代你调用该 LLM 接口(因此不受浏览器跨域限制)。
           </p>
 
           <details>

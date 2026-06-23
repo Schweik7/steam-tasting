@@ -1,6 +1,5 @@
-import type { Settings } from '../types'
-import { SYSTEM_PROMPT, buildUserMessage } from './prompt'
-import type { Game } from '../types'
+import type { Settings, Game } from '../types'
+import { reportUrl } from './api'
 
 export interface StreamHandlers {
   onDelta: (chunk: string) => void
@@ -8,37 +7,39 @@ export interface StreamHandlers {
   signal?: AbortSignal
 }
 
-/** Call an OpenAI-compatible /chat/completions endpoint with streaming. */
+/**
+ * Ask the backend to generate the report. The prompt is built server-side
+ * (server/prompt.py) and the LLM call is proxied through our backend, which
+ * streams back the OpenAI-style SSE we parse here.
+ */
 export async function streamTastingReport(
   games: Game[],
   s: Settings,
   h: StreamHandlers,
 ): Promise<void> {
-  const base = s.base.trim().replace(/\/+$/, '')
-  const url = base.endsWith('/chat/completions') ? base : base + '/chat/completions'
-  h.onStatus?.('连接 ' + url + ' …')
+  h.onStatus?.('连接后端生成报告 …')
 
-  const resp = await fetch(url, {
+  const resp = await fetch(reportUrl(), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer ' + s.key.trim(),
-    },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
     signal: h.signal,
     body: JSON.stringify({
-      model: s.model.trim(),
-      temperature: s.temp || 0.8,
-      stream: true,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildUserMessage(games, s) },
-      ],
+      base: s.base,
+      model: s.model,
+      key: s.key,
+      topn: s.topn,
+      temp: s.temp,
+      lang: s.lang,
+      style: s.style,
+      blind: s.blind,
+      games,
     }),
   })
 
   if (!resp.ok) {
-    const body = await resp.text().catch(() => '')
-    throw new Error(`HTTP ${resp.status} ${body.slice(0, 300)}`)
+    const body = await resp.json().catch(() => ({}))
+    throw new Error(body.message || `生成失败 (HTTP ${resp.status})`)
   }
   if (!resp.body) throw new Error('无响应流')
 

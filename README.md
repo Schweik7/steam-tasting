@@ -4,7 +4,7 @@
 生成一份有洞察、好读、带点人情味的**玩家品味鉴定报告**:口味聚类、时间考古(白月光 vs 当下在玩)、
 投入人格、以及"你大概率会喜欢但还没碰"的精准推荐。
 
-> LLM 的 Key 仅存在浏览器 localStorage,请求由浏览器直连你填写的 API Base,不经任何服务器。
+> LLM 的 Key 存在浏览器 localStorage;生成报告时由后端构建提示词并代调你填写的 LLM(用完即弃,不持久化)。
 
 获取游玩数据有两种途径:
 
@@ -88,16 +88,16 @@ uv run uvicorn server.main:app --port 8787 --reload   # 另开一个终端跑 pn
 2. **用 Steam 登录**(自动拉取游戏库),或拖入 `games.json` / `games.csv`。
 3. 点「⚡ 生成品味鉴定报告」,流式查看,随后可复制 / 下载 / 分享。
 
-> ⚠️ **CORS**:浏览器直连 LLM 接口需对方允许跨域。若报 `Failed to fetch` / CORS,
-> 换一个支持 CORS 的中转,或自建代理。
+> 生成报告由**后端**构建提示词并代调你填写的 LLM(因此不受浏览器跨域限制)。
+> 若 LLM 接口被墙,给后端 `.env` 配 `PROXY_URL` 即可。
 
 ---
 
 ## 📁 项目结构
 
 ```
-server/                    # Python/FastAPI 后端(Steam 登录 + Steam API 代理)
-  main.py  steam.py  config.py
+server/                    # Python/FastAPI 后端(Steam 登录 + Steam/LLM 代理)
+  main.py  steam.py  prompt.py  config.py
 pyproject.toml             # 后端依赖(uv)
 steam_export.py            # 备选途径:Steam 数据导出脚本(无第三方依赖)
 game_tasting_template.md   # 报告模板 + System Prompt
@@ -107,8 +107,7 @@ src/
   App.tsx                  # 主界面 + 登录态
   lib/api.ts               # 后端 API 客户端
   lib/parse.ts             # JSON/CSV 解析与归一化
-  lib/llm.ts               # OpenAI 兼容流式调用
-  lib/prompt.ts            # System / User prompt 构建
+  lib/llm.ts               # 调 /api/report 并解析流式 SSE
   lib/exporter.ts          # 复制 / 下载 / 分享
   hooks/useLocalStorage.ts
   types.ts  styles.css
@@ -121,8 +120,9 @@ src/
 
 ## 🔒 隐私
 
-- API Key 只存在浏览器 localStorage,不上传任何第三方服务器。
-- `games.json` / `games.csv` 含个人游玩数据,已在 `.gitignore` 中默认忽略,不会被提交。
+- LLM 的 Key 存在浏览器 localStorage;生成报告时发给本应用后端代调 LLM,后端用完即弃、不持久化。
+- Steam Web API Key 只在后端环境变量(`.env`,已 gitignore),永不下发浏览器。
+- `games.json` / `games.csv` / `*.report.md` 含个人数据,已在 `.gitignore` 中默认忽略,不会被提交。
 
 ## 📜 License
 

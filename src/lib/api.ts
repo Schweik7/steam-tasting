@@ -8,6 +8,9 @@ const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? ''
 /** URL that starts the Steam OpenID login (full-page redirect). */
 export const steamLoginUrl = () => `${API_BASE}/api/auth/steam/login`
 
+/** Backend endpoint that builds the prompt and streams the report. */
+export const reportUrl = () => `${API_BASE}/api/report`
+
 /** Fetch the logged-in user + their games, or null if not authenticated. */
 export async function fetchMe(): Promise<MeResponse | null> {
   const resp = await fetch(`${API_BASE}/api/me`, { credentials: 'include' })
