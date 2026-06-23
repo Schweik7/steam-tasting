@@ -37,14 +37,14 @@
 - 现在:**开发者申请一个 key,放在后端环境变量里**,所有用户用 Steam 登录即可,
   终端用户什么都不用申请。这才是集成 OpenID 的意义。
 
-### 为什么必须有后端(GitHub Pages 不够)
+### 为什么必须有后端(纯静态托管不够)
 
 1. **CORS** —— Steam Web API 不带跨域响应头,浏览器无法直接 `fetch`,必须服务端转发。
 2. **密钥保密** —— API Key 不能进前端代码,否则会被任何人提取盗用。
 3. **OpenID 回调** —— 登录断言需要一个服务端回调地址来验证。
 
-GitHub Pages 是纯静态,跑不了后端,所以**登录功能只在自托管(Python 后端)下可用**;
-Pages 上只能用「上传文件」途径。
+所以**登录功能只在自托管(Python 后端)下可用**;若只把 `dist/` 丢到纯静态托管上,
+就只剩「上传文件」途径。
 
 ---
 
@@ -168,17 +168,6 @@ uv run uvicorn server.main:app --host 0.0.0.0 --port 8787
 - 后端通常挂在反向代理(Nginx/Caddy)后面;代理需透传 `X-Forwarded-Proto`,
   并把 `/` 与 `/api` 都转发到 uvicorn。生产建议多 worker:`--workers 2`。
 - 在 Steam 注册 API Key 时填写的 domain 仅作记录,OpenID 的信任域由 `realm`(=`PUBLIC_URL`)决定。
-
-### GitHub Pages(仅静态,无登录)
-
-仓库已带 `.github/workflows/deploy.yml`。Pages 上**没有后端**,只有「上传文件」途径可用。
-构建时用 `VITE_BASE` 指定子路径:
-
-```bash
-VITE_BASE=/steam-tasting/ pnpm build
-```
-
-(workflow 已设置该变量。)
 
 ---
 
