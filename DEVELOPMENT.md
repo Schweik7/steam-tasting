@@ -43,7 +43,7 @@
 2. **密钥保密** —— API Key 不能进前端代码,否则会被任何人提取盗用。
 3. **OpenID 回调** —— 登录断言需要一个服务端回调地址来验证。
 
-GitHub Pages 是纯静态,跑不了后端,所以**登录功能只在自托管(Node 后端)下可用**;
+GitHub Pages 是纯静态,跑不了后端,所以**登录功能只在自托管(Python 后端)下可用**;
 Pages 上只能用「上传文件」途径。
 
 ---
@@ -63,24 +63,31 @@ Pages 上只能用「上传文件」途径。
   └─ ⑤ 浏览器拿 games → 直连用户填写的 LLM /chat/completions(流式)→ 渲染报告
 ```
 
-### OpenID 2.0 登录流程(`server/steam.js`)
+### OpenID 2.0 登录流程(`server/steam.py`)
 
-1. `buildLoginUrl(realm, returnTo)` 构造跳转 URL,`identity`/`claimed_id` 用
+1. `build_login_url(realm, return_to)` 构造跳转 URL,`identity`/`claimed_id` 用
    `identifier_select`(让用户自己选账号)。
 2. Steam 回调到 `return_to`,带一堆 `openid.*` 参数。
-3. `verifyAssertion(query)` 把这些参数原样回传给 Steam,并把 `openid.mode`
+3. `verify_assertion(client, query)` 把这些参数原样回传给 Steam,并把 `openid.mode`
    改成 `check_authentication`;Steam 回 `is_valid:true` 才算数(防伪造)。
 4. 从 `openid.claimed_id`(形如 `…/openid/id/7656119…`)正则提取 17 位 SteamID64。
 
-### 会话(`server/session.js`)
+### 会话
 
-无数据库。会话是一个**自包含的签名 Cookie**:`base64url(payload).HMAC-SHA256`,
-payload 为 `{ steamid, iat }`。读取时用 `timingSafeEqual` 校验签名 + 7 天过期检查。
-密钥来自 `SESSION_SECRET`。
+无数据库。用 Starlette `SessionMiddleware`,会话存在**签名 Cookie**(`itsdangerous`
+时间戳签名,7 天过期)里,payload 为 `{ steamid }`,密钥来自 `SESSION_SECRET`。
+> 暂不需要持久化,所以没有引入 SQLModel + SQLite;若将来要存报告历史/缓存再加。
+
+### 出网代理(`PROXY_URL`)
+
+Steam 的 `api.steampowered.com` / `steamcommunity.com` 在部分网络被墙。后端用
+单个 `httpx.AsyncClient(proxy=PROXY_URL)`(见 `server/main.py` 的 lifespan)。
+本地开发时把 `.env` 的 `PROXY_URL` 指向你的 Clash/V2Ray(如 `http://127.0.0.1:7890`);
+正常服务器部署留空即可。
 
 ### 数据归一化
 
-后端 `getOwnedGames` 输出的字段刻意与 `steam_export.py` 一致
+后端 `get_owned_games` 输出的字段刻意与 `steam_export.py` 一致
 (`playtime_hours` / `last_played` / `playtime_2weeks_min` / `appid`),
 因此前端 `src/lib/parse.ts` 的 `normGame` 能同时吃「API 数据」和「上传文件」。
 
@@ -89,10 +96,11 @@ payload 为 `{ steamid, iat }`。读取时用 `timingSafeEqual` 校验签名 + 7
 ## 4. 目录结构
 
 ```
-server/                  # Node/Express 后端(纯 ESM JS,无需构建)
-  index.js               #   Express 应用:路由 + 生产环境托管 dist
-  steam.js               #   OpenID 验证 + Steam Web API 调用
-  session.js             #   签名 Cookie 会话
+server/                  # Python/FastAPI 后端(uv 管理)
+  main.py                #   FastAPI 应用:路由 + SessionMiddleware + 托管 dist
+  steam.py               #   OpenID 验证 + Steam Web API 调用(httpx)
+  config.py              #   load_dotenv 读取环境变量 + 启动校验
+pyproject.toml           # 后端依赖(uv)
 src/                     # 前端(Vite + React + TS)
   App.tsx                #   主界面 + 登录态
   lib/api.ts             #   后端 API 客户端(/api/me、登录、登出)
@@ -111,11 +119,12 @@ vite.config.ts           # base 路径 + 开发期 /api 代理
 
 ## 5. 本地开发
 
-需要 Node 18+(用到内置 `fetch`)与 pnpm。
+需要:Python 3.11+ 与 [uv](https://docs.astral.sh/uv/);前端需 Node 18+ 与 pnpm。
 
 ```bash
-pnpm install
-cp .env.example .env        # 填 STEAM_API_KEY 与 SESSION_SECRET
+uv sync                     # 创建 .venv 并装后端依赖
+pnpm install                # 前端依赖
+cp .env.example .env        # 填 STEAM_API_KEY 与 SESSION_SECRET(墙内再填 PROXY_URL)
 ```
 
 `.env` 关键项(完整说明见 `.env.example`):
@@ -123,16 +132,17 @@ cp .env.example .env        # 填 STEAM_API_KEY 与 SESSION_SECRET
 | 变量 | 说明 |
 |---|---|
 | `STEAM_API_KEY` | 开发者的 Steam Web API Key,见 https://steamcommunity.com/dev/apikey |
-| `SESSION_SECRET` | 长随机串,签 Cookie 用。`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `SESSION_SECRET` | 长随机串,签 Cookie 用。`python -c "import secrets; print(secrets.token_hex(32))"` |
 | `PORT` | 后端端口,默认 `8787` |
 | `PUBLIC_URL` | **浏览器实际访问到的后端基址**,用于拼 OpenID `realm`/`return_to`。开发期填 `http://localhost:5173`(走 Vite 代理) |
 | `FRONTEND_URL` | 登录成功后跳回的地址,默认 `/` |
+| `PROXY_URL` | 可选出网代理(如 `http://127.0.0.1:7890`),墙内访问 Steam 用;服务器留空 |
 
 开两个终端:
 
 ```bash
-pnpm server     # 后端 :8787
-pnpm dev        # 前端 :5173(已配置把 /api 代理到 :8787)
+uv run uvicorn server.main:app --port 8787 --reload   # 后端 :8787
+pnpm dev                                               # 前端 :5173(已把 /api 代理到 :8787)
 ```
 
 打开 http://localhost:5173 → 点「用 Steam 登录」。
@@ -142,21 +152,21 @@ pnpm dev        # 前端 :5173(已配置把 /api 代理到 :8787)
 
 ---
 
-## 6. 生产部署(自托管 Node)
+## 6. 生产部署(自托管)
 
 后端在检测到 `dist/` 时会**自己托管前端**,因此前后端同源、无 CORS、Cookie 简单。
 
 ```bash
 pnpm build                  # 产出 dist/(base 默认 '/',匹配后端根路径托管)
 # .env 里 PUBLIC_URL 改成你的真实对外地址,例如 https://your-domain
-pnpm start                  # 或 node server/index.js
+uv run uvicorn server.main:app --host 0.0.0.0 --port 8787
 ```
 
 要点:
 
-- **`PUBLIC_URL` 必须是真实对外 URL**,且建议 HTTPS;为 `https://` 时 Cookie 自动带 `secure`。
-- 后端通常挂在反向代理(Nginx/Caddy)后面,已 `app.set('trust proxy', 1)`。
-  代理需透传 `X-Forwarded-Proto`,并把 `/` 与 `/api` 都转发到 Node。
+- **`PUBLIC_URL` 必须是真实对外 URL**,且建议 HTTPS;为 `https://` 时 Cookie 自动带 `Secure`。
+- 后端通常挂在反向代理(Nginx/Caddy)后面;代理需透传 `X-Forwarded-Proto`,
+  并把 `/` 与 `/api` 都转发到 uvicorn。生产建议多 worker:`--workers 2`。
 - 在 Steam 注册 API Key 时填写的 domain 仅作记录,OpenID 的信任域由 `realm`(=`PUBLIC_URL`)决定。
 
 ### GitHub Pages(仅静态,无登录)
@@ -177,7 +187,7 @@ VITE_BASE=/steam-tasting/ pnpm build
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/health` | 健康检查 `{ok:true}` |
-| GET | `/api/auth/steam/login` | 302 跳转 Steam OpenID |
+| GET | `/api/auth/steam/login` | 307 跳转 Steam OpenID |
 | GET | `/api/auth/steam/return` | OpenID 回调,验证后写 Cookie 并跳回前端 |
 | GET | `/api/me` | 当前用户 `{profile, games, gamesPrivate}`;未登录 401 |
 | POST | `/api/logout` | 清除会话 Cookie |
@@ -190,7 +200,7 @@ VITE_BASE=/steam-tasting/ pnpm build
 ## 8. 安全与隐私
 
 - **API Key 只在后端**(环境变量),永不下发到浏览器。`.env` 已被 `.gitignore` 忽略。
-- 会话 Cookie 为 `httpOnly` + `sameSite=lax`,HTTPS 下 `secure`;签名防篡改,7 天过期。
+- 会话 Cookie 为 `HttpOnly` + `SameSite=Lax`,HTTPS 下 `Secure`;`itsdangerous` 签名防篡改,7 天过期。
 - **LLM 的 Key 不经过后端** —— 由浏览器直连用户填写的 API Base,只存 localStorage。
 - 个人游玩数据(`games.json` / `games.csv` / `*.report.md`)与 `.env` 均在 `.gitignore` 中。
 - 我们不持久化任何用户数据;`/api/me` 每次实时向 Steam 拉取。

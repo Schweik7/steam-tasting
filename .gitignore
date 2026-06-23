@@ -5,6 +5,11 @@ dist-ssr
 *.tsbuildinfo
 .DS_Store
 
+# python backend (uv)
+.venv
+__pycache__/
+*.pyc
+
 # secrets (backend env: Steam API key, session secret)
 .env
 .env.*

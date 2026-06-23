@@ -9,7 +9,7 @@
 获取游玩数据有两种途径:
 
 - **🎮 用 Steam 登录(推荐)**:部署带后端的版本后,用户点「用 Steam 登录」即可自动拉取自己的游戏库,
-  **无需自己申请任何 Key**。开发者只需在后端配置**一个** Steam Web API Key。需自托管 Node 后端,见
+  **无需自己申请任何 Key**。开发者只需在后端配置**一个** Steam Web API Key。需自托管 Python/FastAPI 后端,见
   [`DEVELOPMENT.md`](./DEVELOPMENT.md)。
 - **📄 上传导出文件**:用下面的 `steam_export.py` 自己导出 `games.json` / `games.csv` 再拖入。纯静态即可用。
 
@@ -64,7 +64,7 @@
 
 ## 🖥️ 二、启动 Web 分析界面
 
-需要:Node 18+ 与 pnpm。
+只想用「上传文件」模式:需要 Node 18+ 与 pnpm。
 
 ```bash
 pnpm install
@@ -73,10 +73,19 @@ pnpm dev      # 打开 http://localhost:5173
 pnpm build && pnpm preview
 ```
 
+想用「Steam 登录」模式:还需启动 Python/FastAPI 后端(uv 管理),完整步骤见
+[`DEVELOPMENT.md`](./DEVELOPMENT.md):
+
+```bash
+uv sync
+cp .env.example .env       # 填 STEAM_API_KEY、SESSION_SECRET(墙内再填 PROXY_URL)
+uv run uvicorn server.main:app --port 8787 --reload   # 另开一个终端跑 pnpm dev
+```
+
 界面里:
 
 1. 填 **API Base**(OpenAI 兼容,如 `https://api.openai.com/v1`、各家中转、本地推理)、**模型名**、**API Key**。
-2. 拖入 `games.json` 或 `games.csv`。
+2. **用 Steam 登录**(自动拉取游戏库),或拖入 `games.json` / `games.csv`。
 3. 点「⚡ 生成品味鉴定报告」,流式查看,随后可复制 / 下载 / 分享。
 
 > ⚠️ **CORS**:浏览器直连 LLM 接口需对方允许跨域。若报 `Failed to fetch` / CORS,
@@ -87,8 +96,9 @@ pnpm build && pnpm preview
 ## 📁 项目结构
 
 ```
-server/                    # Node/Express 后端(Steam 登录 + Steam API 代理)
-  index.js  steam.js  session.js
+server/                    # Python/FastAPI 后端(Steam 登录 + Steam API 代理)
+  main.py  steam.py  config.py
+pyproject.toml             # 后端依赖(uv)
 steam_export.py            # 备选途径:Steam 数据导出脚本(无第三方依赖)
 game_tasting_template.md   # 报告模板 + System Prompt
 legacy-standalone.html     # 早期单文件版(无需构建,留作备份)
