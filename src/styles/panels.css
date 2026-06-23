@@ -1,0 +1,129 @@
+/* result panels */
+.paneltop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.paneltop h2 {
+  margin: 0;
+}
+.paneltop .toolbar {
+  margin-top: 0;
+}
+.revise {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.revise input {
+  flex: 1;
+}
+.revise button {
+  margin: 0;
+  white-space: nowrap;
+}
+.poemgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 720px) {
+  .poemgrid {
+    grid-template-columns: 1fr;
+  }
+}
+.poem-card {
+  margin: 0;
+}
+.poem {
+  white-space: pre-wrap;
+  line-height: 1.9;
+  font-size: 15px;
+  min-height: 80px;
+  color: var(--fg);
+  padding: 6px 2px;
+}
+.sharebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.sharebar span {
+  color: var(--muted);
+}
+.sharebar input {
+  flex: 1;
+  min-width: 180px;
+}
+.sharebar button,
+.sharebar .btnlink {
+  margin: 0;
+}
+.profile-share {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.profile-share .avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+}
+
+.foot {
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 20px;
+}
+.foot .gh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.foot .gh:hover {
+  color: var(--accent);
+}
+.egg-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: egg-fade 0.2s ease;
+}
+.egg-box {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 30px 34px;
+  max-width: 380px;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.egg-emoji {
+  font-size: 44px;
+}
+.egg-box p {
+  font-size: 16px;
+  line-height: 1.7;
+  margin: 14px 0 20px;
+}
+@keyframes egg-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

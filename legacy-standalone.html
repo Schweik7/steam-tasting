@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🎮 Game Tasting · 玩家品味鉴定</title>
+<title>🎮 Game Tasting · 游戏生涯报告</title>
 <style>
   :root{
     --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --border:#2a323d;
@@ -65,7 +65,7 @@
 <body>
 <header>
   <h1>🎮 Game Tasting</h1>
-  <p>填入 LLM 接口 → 上传 Steam 导出的 games.json / games.csv → 一键生成玩家品味鉴定报告</p>
+  <p>填入 LLM 接口 → 上传 Steam 导出的 games.json / games.csv → 一键生成玩家游戏生涯报告</p>
 </header>
 
 <div class="wrap">
@@ -119,7 +119,7 @@
 
   <div class="card">
     <h2>③ 生成报告</h2>
-    <button id="go" disabled>⚡ 生成品味鉴定报告</button>
+    <button id="go" disabled>⚡ 生成游戏生涯报告</button>
     <button id="stop" class="ghost" style="display:none">停止</button>
     <div id="status"></div>
   </div>
@@ -239,9 +239,9 @@ function renderParsed(fname){
 function esc(s){return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
 
 // ---------- prompt building ----------
-const SYSTEM_PROMPT = `你是一位资深的游戏品味鉴赏家,兼具数据分析师的严谨与游戏媒体主笔的文采。
+const SYSTEM_PROMPT = `你是一位资深的游戏鉴赏家,兼具数据分析师的严谨与游戏媒体主笔的文采。
 任务:依据用户提供的 Steam 游玩数据(游戏名、总时长、最近2周时长、最后游玩日期),
-写一份既有洞察、又好读、还带点人情味的"玩家品味鉴定报告"。
+写一份既有洞察、又好读、还带点人情味的"玩家游戏生涯报告"。
 
 铁律:
 1. 一切结论由数据支撑,每个判断带证据(具体游戏名+时长/日期)。不要编造数据里没有的游戏。
@@ -264,7 +264,7 @@ function buildUserMsg(){
     if (never.length) blind = `\n\n【买了从未玩(节选,可作推荐参考的盲点)】\n${never.join("、")}`;
   }
   const structure = `请严格按以下结构输出 Markdown:
-# 🎮 玩家品味鉴定报告
+# 🎮 玩家游戏生涯报告
 ## 0. 一句话定性(含专属称号)
 ## 1. 速览面板(表格:拥有/玩过+游玩率/总时长/深耕指数/当前在玩)
 ## 2. 口味光谱(2-4个核心偏好簇,各有举证;一条反差惊喜)

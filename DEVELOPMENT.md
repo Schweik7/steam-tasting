@@ -8,7 +8,7 @@
 ## 1. 这个项目是什么
 
 把 Steam 玩家的游玩历史(游戏 / 时长 / 最后游玩时间)交给任意 OpenAI 兼容的 LLM,
-生成一份「玩家品味鉴定报告」。
+生成一份「玩家游戏生涯报告」。
 
 获取游玩数据有**两种途径**,前端对两者一视同仁(归一化成同一份 `Game[]`):
 
@@ -21,8 +21,11 @@
 > 报告生成由**后端**完成:浏览器把游戏数据 + LLM 设置发给 `/api/report`,后端构建
 > 提示词、代调 LLM 并把 SSE 流式转发回来。后端职责 = Steam 认证 + Steam 数据代理 + LLM 代理。
 >
-> 另有 **MagicVal 邀请码**:用户在前端填 `2016–2026` 即用后端预置的 LLM(`LLM_API_*`),
-> 无需自带 API(见 §3「MagicVal」)。
+> 另有 **MagicVal 邀请码**:用户填入邀请码(`INVITE_CODES` 环境变量,默认 `2016–2026`)即用
+> 后端预置的 LLM(`LLM_API_*`),无需自带 API(见 §3「MagicVal」)。
+>
+> 登录用户的报告 + 两首诗按 SteamID **持久化**(SQLite),再次登录直接看到;每份报告有一个
+> 公开分享链接 `/s/<id>`(见 §3「持久化与分享」)。
 
 ---
 
@@ -83,9 +86,8 @@
 
 ### 会话
 
-无数据库。用 Starlette `SessionMiddleware`,会话存在**签名 Cookie**(`itsdangerous`
+用 Starlette `SessionMiddleware`,会话存在**签名 Cookie**(`itsdangerous`
 时间戳签名,7 天过期)里,payload 为 `{ steamid }`,密钥来自 `SESSION_SECRET`。
-> 暂不需要持久化,所以没有引入 SQLModel + SQLite;若将来要存报告历史/缓存再加。
 
 ### 出网代理(`PROXY_URL`)
 
@@ -106,12 +108,30 @@ Steam 的 `api.steampowered.com` / `steamcommunity.com` 在部分网络被墙。
 
 ### MagicVal(免 key 邀请码)
 
-校验逻辑全在后端:可接受的码值只存在 `config.MAGIC_VALUES`(`config.magic_ok()`),
-**不下发浏览器**。前端把用户输入 POST 给 `POST /api/invite`,只拿回 `{valid}` 布尔值,
-据此决定是否放行生成、显示「有效」提示并弹出彩蛋。生成时 `/api/report` 再用同一个
-`magic_ok()` 复核 `magicVal`:命中则改用后端预置的 `LLM_API_BASE` / `LLM_API_KEY` /
-`LLM_MODEL`,用户无需自带 API。**注意**:该路径消耗的是开发者自己的 LLM 额度;
+校验逻辑全在后端:可接受的码值来自 `INVITE_CODES` 环境变量(逗号分隔,默认 `2016–2026`),
+存在 `config.MAGIC_VALUES`(`config.magic_ok()`),**不下发浏览器**。前端把用户输入 POST 给
+`POST /api/invite`,只拿回 `{valid}` 布尔值,据此决定是否放行生成、显示「有效」提示并弹出彩蛋。
+生成时 `/api/report` 再用同一个 `magic_ok()` 复核 `magicVal`:命中则改用后端预置的
+`LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL`,用户无需自带 API;两首诗则用更强的
+`LLM_MODEL_PRO`(默认 `deepseek-v4-pro`)。**注意**:该路径消耗的是开发者自己的 LLM 额度;
 清空 `LLM_API_KEY` 即可关闭。
+
+### 持久化与分享(`server/db.py`)
+
+SQLModel + SQLite(默认 `data/steam-tasting.db`,可用 `DATABASE_URL` 覆盖)。每个登录用户
+按 **SteamID** 存一行 `Report`:报告 Markdown、现代诗、古体诗、公开 `share_id`、时间戳。
+- `/api/report`、`/api/report/revise`、`/api/poem` 在流式完成时把组装好的文本写库
+  (`_stream_llm` 的 `on_complete` 回调);重新生成报告会清空旧诗。
+- 再次登录:前端调 `GET /api/report/saved` 拿回报告与诗,直接跳到结果页。
+- 分享:`GET /api/share/<share_id>` 公开只读返回该报告 + 诗 + 昵称头像;前端路由 `/s/<id>`
+  (`src/Share.tsx`)渲染。`share_id` 为 `secrets.token_urlsafe`,不可猜。
+
+### 报告优化与诗歌(`/api/report/revise` + `/api/poem`)
+
+- **重写**:玩家在报告面板填 ≤140 字意见,`/api/report/revise` 带上「旧报告 + 意见」让模型
+  重写整篇,流式返回并持久化(相当于"继续对话")。
+- **两首诗**:报告生成后自动各写一首现代诗、古体诗(`POEM_SYSTEM`,独立的一次对话,
+  输入是报告全文)。每个面板也可单独填 ≤140 字意见重写。
 
 ### 数据归一化
 
@@ -166,7 +186,10 @@ cp .env.example .env        # 填 STEAM_API_KEY 与 SESSION_SECRET(墙内再填 
 | `PUBLIC_URL` | **浏览器实际访问到的后端基址**,用于拼 OpenID `realm`/`return_to`。开发期填 `http://localhost:5173`(走 Vite 代理) |
 | `FRONTEND_URL` | 登录成功后跳回的地址,默认 `/` |
 | `PROXY_URL` | 可选出网代理(如 `http://127.0.0.1:7890`),墙内访问 Steam 用;无需则留空 |
-| `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL` | MagicVal 邀请码命中时使用的后端预置 LLM;留空则禁用该路径 |
+| `INVITE_CODES` | 邀请码(逗号分隔),命中即用后端 LLM;默认 `2016–2026`(含连字符写法) |
+| `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL` | 邀请码命中时使用的后端预置 LLM;留空则禁用该路径 |
+| `LLM_MODEL_PRO` | 邀请码路径下写诗用的更强模型,默认 `deepseek-v4-pro` |
+| `DATABASE_URL` | 选填;持久化报告/诗的数据库,默认 `data/steam-tasting.db`(SQLite) |
 
 开两个终端:
 
@@ -211,7 +234,11 @@ uv run uvicorn server.main:app --host 0.0.0.0 --port 8787
 | GET | `/api/me` | 当前用户 `{profile, games, gamesPrivate}`;未登录 401 |
 | POST | `/api/logout` | 清除会话 Cookie |
 | POST | `/api/invite` | 校验邀请码 `{code}` → `{valid}`(可接受值仅存后端) |
-| POST | `/api/report` | 构建提示词并代调 LLM,流式转发 SSE(见下) |
+| POST | `/api/report` | 构建提示词并代调 LLM,流式转发 SSE(见下);登录则持久化 |
+| POST | `/api/report/revise` | 带「旧报告 + ≤140 字意见」重写整篇,流式 + 持久化 |
+| POST | `/api/poem` | 据报告写诗 `{kind:'modern'\|'classic', instruction?}`,邀请码用 pro 模型 |
+| GET | `/api/report/saved` | 当前用户已存的报告 + 两首诗;未登录 401 |
+| GET | `/api/share/{id}` | 公开只读返回某 `share_id` 的报告 + 诗 + 昵称头像 |
 
 `/api/report` 请求体(JSON):
 
@@ -221,7 +248,8 @@ uv run uvicorn server.main:app --host 0.0.0.0 --port 8787
 | `base` / `model` / `key` | 用户自带的 LLM 配置;命中 MagicVal 时可省略 |
 | `magicVal` | 邀请码,命中则改用后端 `LLM_API_*` |
 | `topn` / `temp` / `lang` / `style` / `blind` | 报告参数 |
-| `age` / `gender` | 可选;用于人生阶段换算 |
+| `age` / `gender` / `highschool` / `university` / `extra` | 可选;人生阶段换算 + 拼进提示词让报告更精准 |
+| `playerName` / `playerAvatar` | 可选;随报告一起存,用于分享页展示 |
 
 `gamesPrivate: true` 表示登录成功但游戏库为空 —— 通常是用户的「游戏详情」隐私非公开。
 前端会提示用户改隐私后刷新。
@@ -234,8 +262,9 @@ uv run uvicorn server.main:app --host 0.0.0.0 --port 8787
 - 会话 Cookie 为 `HttpOnly` + `SameSite=Lax`,HTTPS 下 `Secure`;`itsdangerous` 签名防篡改,7 天过期。
 - **LLM 的 Key** 存在浏览器 localStorage,生成报告时随请求发给后端,由后端代调 LLM;
   后端**不持久化**它(用完即弃)。生产务必用 HTTPS,使这段传输加密。
-- 个人游玩数据(`games.json` / `games.csv` / `*.report.md`)与 `.env` 均在 `.gitignore` 中。
-- 我们不持久化任何用户数据;`/api/me`、`/api/report` 每次实时向 Steam / LLM 拉取。
+- 个人游玩数据(`games.json` / `games.csv` / `*.report.md`)、`.env` 与 `data/`(SQLite)均在 `.gitignore` 中。
+- `/api/me` 每次实时向 Steam 拉取,不存游戏库;**只持久化**生成好的报告与两首诗(按 SteamID),
+  供再次登录查看与分享。分享链接含随机 `share_id`,知道链接者即可只读查看。
 
 ---
 

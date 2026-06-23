@@ -10,6 +10,10 @@ dist-ssr
 __pycache__/
 *.pyc
 
+# sqlite persistence (user reports + poems)
+data/
+*.db
+
 # secrets (backend env: Steam API key, session secret)
 .env
 .env.*

@@ -1,5 +1,5 @@
-import type { Settings, Game } from '../types'
-import { reportUrl } from './api'
+import type { Settings, Game, Profile } from '../types'
+import { poemUrl, reportUrl, reviseUrl } from './api'
 
 export interface StreamHandlers {
   onDelta: (chunk: string) => void
@@ -7,46 +7,30 @@ export interface StreamHandlers {
   signal?: AbortSignal
 }
 
-/**
- * Ask the backend to generate the report. The prompt is built server-side
- * (server/prompt.py) and the LLM call is proxied through our backend, which
- * streams back the OpenAI-style SSE we parse here.
- */
-export async function streamTastingReport(
-  games: Game[],
-  s: Settings,
-  h: StreamHandlers,
-): Promise<void> {
-  h.onStatus?.('连接后端生成报告 …')
+/** LLM config fields the backend needs to pick / call the model. */
+function llmFields(s: Settings) {
+  return { base: s.base, model: s.model, key: s.key, temp: s.temp, magicVal: s.magicVal }
+}
 
-  const resp = await fetch(reportUrl(), {
+/**
+ * POST a JSON body and parse the OpenAI-style SSE the backend streams back.
+ * The prompt is built server-side; here we only reassemble the text deltas.
+ */
+async function streamSSE(url: string, body: unknown, h: StreamHandlers): Promise<void> {
+  const resp = await fetch(url, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     signal: h.signal,
-    body: JSON.stringify({
-      base: s.base,
-      model: s.model,
-      key: s.key,
-      topn: s.topn,
-      temp: s.temp,
-      lang: s.lang,
-      style: s.style,
-      blind: s.blind,
-      age: s.age,
-      gender: s.gender,
-      magicVal: s.magicVal,
-      games,
-    }),
+    body: JSON.stringify(body),
   })
 
   if (!resp.ok) {
-    const body = await resp.json().catch(() => ({}))
-    throw new Error(body.message || `生成失败 (HTTP ${resp.status})`)
+    const b = await resp.json().catch(() => ({}))
+    throw new Error(b.message || `生成失败 (HTTP ${resp.status})`)
   }
   if (!resp.body) throw new Error('无响应流')
 
-  h.onStatus?.('生成中(流式)…')
   const reader = resp.body.getReader()
   const dec = new TextDecoder()
   let buf = ''
@@ -71,4 +55,55 @@ export async function streamTastingReport(
       }
     }
   }
+}
+
+/** Generate the game-career report from the (selected) games. */
+export function streamReport(
+  games: Game[],
+  s: Settings,
+  profile: Profile | null,
+  h: StreamHandlers,
+): Promise<void> {
+  h.onStatus?.('连接后端生成报告 …')
+  return streamSSE(
+    reportUrl(),
+    {
+      ...llmFields(s),
+      topn: s.topn,
+      lang: s.lang,
+      style: s.style,
+      blind: s.blind,
+      age: s.age,
+      gender: s.gender,
+      highschool: s.highschool,
+      university: s.university,
+      extra: s.extra,
+      playerName: profile?.name ?? '',
+      playerAvatar: profile?.avatar ?? '',
+      games,
+    },
+    h,
+  )
+}
+
+/** Rewrite the report given the player's ≤140-char feedback. */
+export function streamRevise(
+  current: string,
+  instruction: string,
+  s: Settings,
+  h: StreamHandlers,
+): Promise<void> {
+  h.onStatus?.('根据你的意见重写 …')
+  return streamSSE(reviseUrl(), { ...llmFields(s), current, instruction }, h)
+}
+
+/** Write a poem (modern | classic) from the report, optionally with feedback. */
+export function streamPoem(
+  kind: 'modern' | 'classic',
+  report: string,
+  instruction: string,
+  s: Settings,
+  h: StreamHandlers,
+): Promise<void> {
+  return streamSSE(poemUrl(), { ...llmFields(s), kind, report, instruction }, h)
 }

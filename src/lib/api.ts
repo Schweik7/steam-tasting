@@ -8,8 +8,45 @@ const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? ''
 /** URL that starts the Steam OpenID login (full-page redirect). */
 export const steamLoginUrl = () => `${API_BASE}/api/auth/steam/login`
 
-/** Backend endpoint that builds the prompt and streams the report. */
+/** Backend endpoints that build prompts and stream content. */
 export const reportUrl = () => `${API_BASE}/api/report`
+export const reviseUrl = () => `${API_BASE}/api/report/revise`
+export const poemUrl = () => `${API_BASE}/api/poem`
+
+export interface SavedReport {
+  content: string
+  poemModern: string
+  poemClassic: string
+  shareId: string
+  updatedAt: string
+}
+
+export interface ShareData {
+  name: string
+  avatar: string
+  content: string
+  poemModern: string
+  poemClassic: string
+  updatedAt: string
+}
+
+/** The logged-in user's previously saved report (shown on re-login), or null. */
+export async function fetchSavedReport(): Promise<SavedReport | null> {
+  const resp = await fetch(`${API_BASE}/api/report/saved`, { credentials: 'include' })
+  if (!resp.ok) return null
+  const body = await resp.json().catch(() => ({}))
+  return body.report ?? null
+}
+
+/** Public, read-only fetch of a shared report by its share id, or null. */
+export async function fetchShare(id: string): Promise<ShareData | null> {
+  const resp = await fetch(`${API_BASE}/api/share/${encodeURIComponent(id)}`)
+  if (!resp.ok) return null
+  return resp.json()
+}
+
+/** Absolute, shareable URL for a given share id. */
+export const shareLink = (id: string) => `${window.location.origin}/s/${id}`
 
 /** Fetch the logged-in user + their games, or null if not authenticated. */
 export async function fetchMe(): Promise<MeResponse | null> {

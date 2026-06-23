@@ -1,8 +1,10 @@
 # 🎮 Game Tasting · 游戏生涯报告
 
 把你的 Steam 游玩历史(游戏 + 时长 + 最后游玩时间)交给大模型,生成一份有洞察、好读、带点人情味的
-**玩家品味鉴定报告**:口味聚类、时间考古(回不去的白月光 vs 此刻在玩的)、投入人格,以及"你大概率会喜欢
+**玩家游戏生涯报告**:口味聚类、时间考古(回不去的白月光 vs 此刻在玩的)、投入人格,以及"你大概率会喜欢
 但还没碰"的精准推荐。填了年龄还会把每款游戏锚定到你当时的人生阶段(高中 / 大学…),让时间考古更走心。
+
+> 🌐 **线上试用:[https://game-tasting.psyventures.cn](https://game-tasting.psyventures.cn)** —— 直接用 Steam 登录即可生成你的游戏生涯报告。
 
 线上体验或自己部署都行。下面按**你是谁**分三种用法。
 
@@ -17,7 +19,7 @@
 2. 在「① LLM 接口设置」填一个 OpenAI 兼容的 **API Base / 模型 / Key**(如 DeepSeek、OpenAI、各家中转、本地推理)。
    —— 或者,如果你拿到了**邀请码**,填进 MagicVal 框即可直接用站点方的模型,免填上面的 API。
 3. (可选)填年龄、性别,让报告把游玩时间换算成你当时的人生阶段。
-4. 点 **「⚡ 生成品味鉴定报告」**,流式查看,随后可复制 / 下载 `.md` `.html` / 分享。
+4. 点 **「⚡ 生成游戏生涯报告」**,流式查看,随后可复制 / 下载 `.md` `.html` / 分享。
 
 > 你填的 LLM Key 只存在自己浏览器(localStorage);生成时发给站点后端代调 LLM,用完即弃、不持久化。
 
@@ -82,6 +84,14 @@ uv run uvicorn server.main:app --host 127.0.0.1 --port 8787
 
 ---
 
+## 🧱 技术栈
+
+- **前端**:React 19 + Vite 6 + TypeScript;`react-markdown` + `remark-gfm` 渲染报告;SheetJS(`xlsx`,懒加载)导出 Excel;设置存浏览器 localStorage。
+- **后端**:Python 3.11+ / FastAPI + uvicorn + httpx;`python-dotenv` 读环境;`itsdangerous` 签名 Cookie 会话(无需登录态数据库);SQLModel + SQLite 持久化报告与诗;`uv` 管理依赖。
+- **登录与数据**:Steam OpenID 2.0 认证 + Steam Web API(`GetPlayerSummaries` / `GetOwnedGames`)。
+- **生成**:OpenAI 兼容的流式接口(SSE),由后端构建提示词并代调,默认 DeepSeek;邀请码路径下诗歌用更强模型。
+- **部署**:nginx 反向代理 + systemd 常驻 + Let's Encrypt(详见 [`deploy/README.md`](./deploy/README.md))。
+
 ## 📁 项目结构
 
 ```
@@ -99,7 +109,9 @@ DEVELOPMENT.md  # 架构与设计文档
 
 - LLM 的 Key 存在浏览器 localStorage;生成报告时发给本应用后端代调 LLM,后端用完即弃、不持久化。
 - Steam Web API Key 只在后端环境变量(`.env`,已 gitignore),永不下发浏览器。
-- 邀请码的可接受值只存在后端,前端只拿到「有效 / 无效」结果。
+- 邀请码的可接受值只存在后端(`INVITE_CODES` 环境变量),前端只拿到「有效 / 无效」结果。
+- 登录用户生成的报告与两首诗会按 SteamID 存进后端 SQLite(`data/`,已 gitignore),便于再次登录查看与分享;
+  分享链接 `/s/<随机 id>` 任何人可只读查看,不想公开就别分享链接。游戏库本身不落库。
 - `games.json` / `games.csv` / `*.report.md` 含个人数据,已在 `.gitignore` 默认忽略。
 
 ## 📜 License

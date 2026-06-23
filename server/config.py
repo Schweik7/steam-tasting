@@ -31,11 +31,20 @@ PROXY_URL: str | None = os.getenv("PROXY_URL") or None
 LLM_API_BASE: str = os.getenv("LLM_API_BASE", "")
 LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
 LLM_MODEL: str = os.getenv("LLM_MODEL", "")
+# Higher-tier model used for the poems on the MagicVal path (poetry is harder).
+LLM_MODEL_PRO: str = os.getenv("LLM_MODEL_PRO", "deepseek-v4-pro")
 
 
-# MagicVal gate: entering this exact string unlocks the developer's LLM.
-# Accept both the en-dash and plain-hyphen spellings.
-MAGIC_VALUES = {"2016–2026", "2016-2026"}
+# MagicVal gate: entering one of these exact strings unlocks the developer's
+# LLM. Configurable via INVITE_CODES (comma-separated). Defaults to the original
+# code in both en-dash and plain-hyphen spellings. The value(s) live only here,
+# never shipped to the browser.
+_DEFAULT_INVITE_CODES = "2016–2026,2016-2026"
+MAGIC_VALUES = {
+    c.strip()
+    for c in os.getenv("INVITE_CODES", _DEFAULT_INVITE_CODES).split(",")
+    if c.strip()
+}
 
 
 def magic_ok(value: str) -> bool:

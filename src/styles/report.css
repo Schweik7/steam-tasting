@@ -1,0 +1,47 @@
+.report {
+  background: #fff;
+  color: #1a1a1a;
+  border-radius: 12px;
+  padding: 28px 34px;
+  margin-top: 14px;
+}
+.report h1 {
+  font-size: 26px;
+  border-bottom: 2px solid #eee;
+  padding-bottom: 8px;
+}
+.report h2 {
+  font-size: 20px;
+  margin-top: 28px;
+  color: #1b6e9b;
+}
+.report table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+}
+.report th,
+.report td {
+  border: 1px solid #ddd;
+  padding: 7px 10px;
+  text-align: left;
+  font-size: 14px;
+}
+.report th {
+  background: #f3f6f9;
+}
+.report blockquote {
+  border-left: 4px solid #66c0f4;
+  margin: 12px 0;
+  padding: 6px 14px;
+  background: #f5fbff;
+  color: #333;
+}
+.report code {
+  background: #f0f0f0;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+a {
+  color: var(--accent);
+}

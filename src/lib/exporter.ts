@@ -33,7 +33,7 @@ footer{margin-top:40px;color:#999;font-size:13px}`
 export function downloadHtml(renderedHtml: string) {
   const doc = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>玩家品味鉴定报告</title><style>${REPORT_CSS}</style></head>
+<title>玩家游戏生涯报告</title><style>${REPORT_CSS}</style></head>
 <body>${renderedHtml}
 <footer>由 Game Tasting 生成 · ${new Date().toLocaleString()}</footer>
 </body></html>`
@@ -124,7 +124,7 @@ export async function shareReport(md: string): Promise<'shared' | 'copied'> {
     share?: (data: { title?: string; text?: string }) => Promise<void>
   }
   if (nav.share) {
-    await nav.share({ title: '我的玩家品味鉴定报告', text: md })
+    await nav.share({ title: '我的玩家游戏生涯报告', text: md })
     return 'shared'
   }
   await navigator.clipboard.writeText(md)
