@@ -27,7 +27,12 @@ const DEFAULT_SETTINGS: Settings = {
   blind: true,
   age: 0,
   gender: '',
+  magicVal: '',
 }
+
+/** Invite code that unlocks our LLM (accept en-dash or plain hyphen). */
+const MAGIC_VALUES = ['2016–2026', '2016-2026']
+const magicOk = (v: string) => MAGIC_VALUES.includes((v || '').trim())
 
 export default function App() {
   const [settings, setSettings] = useLocalStorage<Settings>('gt_settings_v2', DEFAULT_SETTINGS)
@@ -46,6 +51,7 @@ export default function App() {
   // e.g. titles someone else played on the account, or ones they'd rather hide.
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const [showAll, setShowAll] = useState(false)
+  const [egg, setEgg] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const reportRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -140,8 +146,8 @@ export default function App() {
   }
 
   async function generate() {
-    if (!settings.base || !settings.key || !settings.model) {
-      setStatus({ msg: '请先填写 API Base / Key / 模型', kind: 'err' })
+    if (!magicOk(settings.magicVal) && (!settings.base || !settings.key || !settings.model)) {
+      setStatus({ msg: '请先填写 API Base / Key / 模型(或输入邀请码)', kind: 'err' })
       return
     }
     if (!selectedGames.length) {
@@ -224,6 +230,22 @@ export default function App() {
             保存在本机浏览器(localStorage)。生成报告时,这些设置会发给本应用后端,
             由后端构建提示词并代你调用该 LLM 接口(因此不受浏览器跨域限制)。
           </p>
+
+          <label>MagicVal(邀请码,选填)</label>
+          <input
+            value={settings.magicVal}
+            onChange={(e) => {
+              const v = e.target.value
+              set('magicVal', v)
+              if (magicOk(v)) setEgg(true)
+            }}
+            placeholder="有邀请码?填它就能免填上面的 API"
+          />
+          {magicOk(settings.magicVal) && (
+            <p className="hint" style={{ color: 'var(--ok)' }}>
+              ✓ 邀请码有效,将使用我们的 API,上面的 API 配置可留空。
+            </p>
+          )}
 
           <details>
             <summary>高级选项</summary>
@@ -486,6 +508,16 @@ export default function App() {
       <footer className="foot">
         本地运行 · 数据不出本机 · <a href="https://github.com/">Game Tasting</a>
       </footer>
+
+      {egg && (
+        <div className="egg-mask" onClick={() => setEgg(false)}>
+          <div className="egg-box" onClick={(e) => e.stopPropagation()}>
+            <div className="egg-emoji">🎁</div>
+            <p>谢谢你,我的朋友,愿意尝试这个傻乎乎的网站~</p>
+            <button onClick={() => setEgg(false)}>开始吧</button>
+          </div>
+        </div>
+      )}
     </>
   )
 }

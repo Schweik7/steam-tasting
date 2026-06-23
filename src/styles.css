@@ -293,3 +293,38 @@ a {
   font-size: 12px;
   padding: 20px;
 }
+.egg-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: egg-fade 0.2s ease;
+}
+.egg-box {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 30px 34px;
+  max-width: 380px;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.egg-emoji {
+  font-size: 44px;
+}
+.egg-box p {
+  font-size: 16px;
+  line-height: 1.7;
+  margin: 14px 0 20px;
+}
+@keyframes egg-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

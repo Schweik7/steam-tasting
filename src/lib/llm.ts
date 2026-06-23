@@ -35,6 +35,7 @@ export async function streamTastingReport(
       blind: s.blind,
       age: s.age,
       gender: s.gender,
+      magicVal: s.magicVal,
       games,
     }),
   })

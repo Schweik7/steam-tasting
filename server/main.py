@@ -121,11 +121,19 @@ async def report(request: Request):
             for g in raw
         ]
 
-    base = (payload.get("base") or "").strip().rstrip("/")
-    model = (payload.get("model") or "").strip()
-    key = (payload.get("key") or "").strip()
-    if not base or not model or not key:
-        return JSONResponse({"error": "missing_llm_settings"}, status_code=400)
+    # MagicVal unlocks the developer's own LLM, so the user needn't bring one.
+    if config.magic_ok(payload.get("magicVal", "")):
+        base = config.LLM_API_BASE.strip().rstrip("/")
+        model = config.LLM_MODEL.strip()
+        key = config.LLM_API_KEY.strip()
+        if not base or not model or not key:
+            return JSONResponse({"error": "server_llm_unconfigured"}, status_code=503)
+    else:
+        base = (payload.get("base") or "").strip().rstrip("/")
+        model = (payload.get("model") or "").strip()
+        key = (payload.get("key") or "").strip()
+        if not base or not model or not key:
+            return JSONResponse({"error": "missing_llm_settings"}, status_code=400)
     url = base if base.endswith("/chat/completions") else base + "/chat/completions"
 
     body = {

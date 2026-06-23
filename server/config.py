@@ -26,6 +26,21 @@ FRONTEND_URL: str = os.getenv("FRONTEND_URL", "/")
 # blocked. Left empty in normal server deployments.
 PROXY_URL: str | None = os.getenv("PROXY_URL") or None
 
+# Developer-provided LLM, used when a user enters a valid MagicVal (so they
+# don't have to bring their own API). Leave empty to disable the magic path.
+LLM_API_BASE: str = os.getenv("LLM_API_BASE", "")
+LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
+LLM_MODEL: str = os.getenv("LLM_MODEL", "")
+
+
+# MagicVal gate: entering this exact string unlocks the developer's LLM.
+# Accept both the en-dash and plain-hyphen spellings.
+MAGIC_VALUES = {"2016–2026", "2016-2026"}
+
+
+def magic_ok(value: str) -> bool:
+    return (value or "").strip() in MAGIC_VALUES
+
 # True when serving over HTTPS -> session cookie gets the Secure flag.
 COOKIE_SECURE: bool = PUBLIC_URL.startswith("https://")
 
