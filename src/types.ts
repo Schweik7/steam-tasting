@@ -33,4 +33,6 @@ export interface Settings {
   lang: '中文' | 'English'
   style: string
   blind: boolean
+  age: number // 0 = 未填;用于把游玩日期映射到人生阶段(高中/大学…)
+  gender: string // '' / 男 / 女 / 其他
 }

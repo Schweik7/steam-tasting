@@ -221,6 +221,18 @@ details summary {
 .preview th {
   color: var(--muted);
 }
+.preview input[type='checkbox'] {
+  width: auto;
+  cursor: pointer;
+}
+.preview tr.off td {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+.preview tr.off td:first-child {
+  opacity: 1;
+  text-decoration: none;
+}
 .toolbar {
   display: flex;
   gap: 10px;

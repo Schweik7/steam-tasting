@@ -8,24 +8,29 @@ import { fetchMe, logout, steamLoginUrl } from './lib/api'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import {
   copyMarkdown,
+  downloadGamesCsv,
+  downloadGamesJson,
+  downloadGamesXlsx,
   downloadHtml,
   downloadMarkdown,
   shareReport,
 } from './lib/exporter'
 
 const DEFAULT_SETTINGS: Settings = {
-  base: '',
-  model: '',
+  base: 'https://api.deepseek.com/v1',
+  model: 'deepseek-v4-flash',
   key: '',
   topn: 40,
   temp: 0.8,
   lang: '中文',
   style: '专业且带适度幽默',
   blind: true,
+  age: 0,
+  gender: '',
 }
 
 export default function App() {
-  const [settings, setSettings] = useLocalStorage<Settings>('gt_settings', DEFAULT_SETTINGS)
+  const [settings, setSettings] = useLocalStorage<Settings>('gt_settings_v2', DEFAULT_SETTINGS)
   const [games, setGames] = useState<Game[] | null>(null)
   const [source, setSource] = useState('')
   const [report, setReport] = useState('')
@@ -37,12 +42,52 @@ export default function App() {
   const [drag, setDrag] = useState(false)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
+  // Games the user has unchecked (excluded from stats / report / export):
+  // e.g. titles someone else played on the account, or ones they'd rather hide.
+  const [excluded, setExcluded] = useState<Set<string>>(new Set())
+  const [showAll, setShowAll] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const reportRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) =>
     setSettings((s) => ({ ...s, [k]: v }))
+
+  // Ensure Base/Model show the DeepSeek defaults whenever they're empty
+  // (e.g. blank values left in localStorage from an earlier visit). Anyone who
+  // typed their own value keeps it.
+  useEffect(() => {
+    setSettings((s) => ({
+      ...s,
+      base: s.base || DEFAULT_SETTINGS.base,
+      model: s.model || DEFAULT_SETTINGS.model,
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const gameKey = (g: Game) => String(g.appid || g.name)
+
+  const selectedGames = useMemo(
+    () => (games ? games.filter((g) => !excluded.has(gameKey(g))) : []),
+    [games, excluded],
+  )
+
+  function loadGames(list: Game[], src: string) {
+    setGames(list)
+    setSource(src)
+    setExcluded(new Set())
+    setShowAll(false)
+  }
+
+  function toggleGame(g: Game) {
+    const k = gameKey(g)
+    setExcluded((prev) => {
+      const next = new Set(prev)
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return next
+    })
+  }
 
   // On load, ask the backend whether we're already logged in via Steam.
   useEffect(() => {
@@ -56,8 +101,7 @@ export default function App() {
             kind: 'err',
           })
         } else {
-          setGames(normalizeGames(me.games))
-          setSource('Steam:' + me.profile.name)
+          loadGames(normalizeGames(me.games), 'Steam:' + me.profile.name)
         }
       })
       .catch((e: Error) => setStatus({ msg: '后端连接失败:' + e.message, kind: 'err' }))
@@ -75,18 +119,17 @@ export default function App() {
 
   const stats = useMemo(() => {
     if (!games) return null
-    const played = games.filter((g) => g.hours > 0)
+    const played = selectedGames.filter((g) => g.hours > 0)
     const total = Math.round(played.reduce((s, g) => s + g.hours, 0))
-    return { owned: games.length, played: played.length, total, top: games.slice(0, 8) }
-  }, [games])
+    return { owned: games.length, selected: selectedGames.length, played: played.length, total }
+  }, [games, selectedGames])
 
   function handleFile(f: File) {
     const r = new FileReader()
     r.onload = () => {
       try {
         const parsed = parseFile(f.name, String(r.result))
-        setGames(parsed)
-        setSource(f.name)
+        loadGames(parsed, f.name)
         setStatus({ msg: '', kind: 'info' })
       } catch (e) {
         setGames(null)
@@ -101,15 +144,15 @@ export default function App() {
       setStatus({ msg: '请先填写 API Base / Key / 模型', kind: 'err' })
       return
     }
-    if (!games) {
-      setStatus({ msg: '请先上传数据', kind: 'err' })
+    if (!selectedGames.length) {
+      setStatus({ msg: '请先登录或上传数据,并至少勾选一款游戏', kind: 'err' })
       return
     }
     setReport('')
     setBusy(true)
     abortRef.current = new AbortController()
     try {
-      await streamTastingReport(games, settings, {
+      await streamTastingReport(selectedGames, settings, {
         signal: abortRef.current.signal,
         onStatus: (msg) => setStatus({ msg, kind: 'info' }),
         onDelta: (chunk) => {
@@ -158,7 +201,7 @@ export default function App() {
               <input
                 value={settings.base}
                 onChange={(e) => set('base', e.target.value)}
-                placeholder="https://api.openai.com/v1"
+                placeholder="https://api.deepseek.com/v1"
               />
             </div>
             <div>
@@ -166,7 +209,7 @@ export default function App() {
               <input
                 value={settings.model}
                 onChange={(e) => set('model', e.target.value)}
-                placeholder="gpt-4o / deepseek-chat / ..."
+                placeholder="deepseek-v4-flash / deepseek-chat / ..."
               />
             </div>
           </div>
@@ -292,17 +335,54 @@ export default function App() {
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
           />
           </details>
-          {stats && (
+          {stats && games && (
             <div className="parsed">
               <div>
                 <span className="pill ok">已载入 {source}</span>
-                <span className="pill">拥有 {stats.owned}</span>
+                <span className="pill">共 {stats.owned}</span>
+                <span className="pill">已选 {stats.selected}</span>
                 <span className="pill">玩过 {stats.played}</span>
                 <span className="pill">总时长 {stats.total}h</span>
               </div>
+
+              <div className="toolbar">
+                <button className="ghost" onClick={() => setExcluded(new Set())}>
+                  全选
+                </button>
+                <button
+                  className="ghost"
+                  onClick={() => setExcluded(new Set(games.map(gameKey)))}
+                >
+                  全不选
+                </button>
+                <span style={{ flex: 1 }} />
+                <button
+                  className="ghost"
+                  onClick={() => downloadGamesJson(selectedGames, profile)}
+                  disabled={!selectedGames.length}
+                >
+                  ⬇ JSON
+                </button>
+                <button
+                  className="ghost"
+                  onClick={() => downloadGamesCsv(selectedGames)}
+                  disabled={!selectedGames.length}
+                >
+                  ⬇ CSV
+                </button>
+                <button
+                  className="ghost"
+                  onClick={() => downloadGamesXlsx(selectedGames, profile)}
+                  disabled={!selectedGames.length}
+                >
+                  ⬇ Excel
+                </button>
+              </div>
+
               <table className="preview">
                 <thead>
                   <tr>
+                    <th></th>
                     <th>#</th>
                     <th>游戏</th>
                     <th>时长(h)</th>
@@ -310,16 +390,28 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {stats.top.map((g, i) => (
-                    <tr key={g.appid || i}>
-                      <td>{i + 1}</td>
-                      <td>{g.name}</td>
-                      <td>{g.hours}</td>
-                      <td>{g.last_played || '-'}</td>
-                    </tr>
-                  ))}
+                  {(showAll ? games : games.slice(0, 8)).map((g, i) => {
+                    const on = !excluded.has(gameKey(g))
+                    return (
+                      <tr key={g.appid || i} className={on ? '' : 'off'}>
+                        <td>
+                          <input type="checkbox" checked={on} onChange={() => toggleGame(g)} />
+                        </td>
+                        <td>{i + 1}</td>
+                        <td>{g.name}</td>
+                        <td>{g.hours}</td>
+                        <td>{g.last_played || '-'}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
+
+              {games.length > 8 && (
+                <button className="ghost" onClick={() => setShowAll((v) => !v)}>
+                  {showAll ? '收起' : `显示全部 ${games.length} 款`}
+                </button>
+              )}
             </div>
           )}
         </section>
@@ -327,6 +419,32 @@ export default function App() {
         {/* ③ generate */}
         <section className="card">
           <h2>③ 生成报告</h2>
+          <p className="hint" style={{ marginTop: 0 }}>
+            (可选)填上年龄和性别,报告会把每款游戏的游玩时间换算成你当时的人生阶段
+            (高中 / 大学…),让时间考古更走心。
+          </p>
+          <div className="row">
+            <div>
+              <label>年龄</label>
+              <input
+                type="number"
+                min={6}
+                max={100}
+                value={settings.age || ''}
+                placeholder="如 24"
+                onChange={(e) => set('age', +e.target.value)}
+              />
+            </div>
+            <div>
+              <label>性别</label>
+              <select value={settings.gender} onChange={(e) => set('gender', e.target.value)}>
+                <option value="">不填</option>
+                <option value="男">男</option>
+                <option value="女">女</option>
+                <option value="其他">其他</option>
+              </select>
+            </div>
+          </div>
           <button onClick={generate} disabled={busy || !games}>
             ⚡ 生成品味鉴定报告
           </button>

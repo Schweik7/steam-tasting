@@ -33,6 +33,8 @@ export async function streamTastingReport(
       lang: s.lang,
       style: s.style,
       blind: s.blind,
+      age: s.age,
+      gender: s.gender,
       games,
     }),
   })

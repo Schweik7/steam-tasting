@@ -1,4 +1,5 @@
 /** Export & share helpers for the generated report. */
+import type { Game, Profile } from '../types'
 
 function ts(): string {
   return new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')
@@ -41,6 +42,80 @@ export function downloadHtml(renderedHtml: string) {
 
 export async function copyMarkdown(md: string): Promise<void> {
   await navigator.clipboard.writeText(md)
+}
+
+/** Build a games.json compatible with steam_export.py (so it can be re-uploaded). */
+export function downloadGamesJson(games: Game[], profile: Profile | null) {
+  const played = games.filter((g) => g.hours > 0)
+  const out = {
+    exported_at: new Date().toISOString(),
+    steamid64: profile?.steamid ?? '',
+    source: 'web',
+    summary: {
+      games_owned: games.length,
+      games_played: played.length,
+      games_never_played: games.length - played.length,
+      total_playtime_hours: Math.round(played.reduce((s, g) => s + g.hours, 0) * 10) / 10,
+    },
+    games: games.map((g) => ({
+      appid: g.appid,
+      name: g.name,
+      playtime_hours: g.hours,
+      playtime_minutes: Math.round(g.hours * 60),
+      playtime_2weeks_min: g.w2,
+      last_played: g.last_played,
+    })),
+  }
+  triggerDownload(JSON.stringify(out, null, 2), `games-${ts()}.json`, 'application/json;charset=utf-8')
+}
+
+function csvCell(v: string | number): string {
+  const s = String(v ?? '')
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+/** Build a games.csv with the same columns steam_export.py emits. */
+export function downloadGamesCsv(games: Game[]) {
+  const head = ['name', 'playtime_hours', 'last_played', 'playtime_2weeks_min', 'appid']
+  const rows = games.map((g) =>
+    [g.name, g.hours, g.last_played, g.w2, g.appid].map(csvCell).join(','),
+  )
+  // BOM so Excel reads UTF-8 correctly.
+  triggerDownload('﻿' + [head.join(','), ...rows].join('\n'), `games-${ts()}.csv`, 'text/csv;charset=utf-8')
+}
+
+/** Build a multi-sheet .xlsx (summary + games) via SheetJS (lazy-loaded). */
+export async function downloadGamesXlsx(games: Game[], profile: Profile | null) {
+  const XLSX = await import('xlsx')
+  const played = games.filter((g) => g.hours > 0)
+  const totalHours = Math.round(played.reduce((s, g) => s + g.hours, 0) * 10) / 10
+
+  const summary = [
+    ['导出时间', new Date().toLocaleString()],
+    ['SteamID64', profile?.steamid ?? ''],
+    ['玩家', profile?.name ?? ''],
+    ['纳入游戏数', games.length],
+    ['玩过', played.length],
+    ['从未玩', games.length - played.length],
+    ['总时长(小时)', totalHours],
+  ]
+
+  const rows = games.map((g) => ({
+    游戏: g.name,
+    '时长(小时)': g.hours,
+    最后游玩: g.last_played,
+    '近2周(分钟)': g.w2,
+    appid: g.appid,
+  }))
+
+  const wb = XLSX.utils.book_new()
+  const wsSummary = XLSX.utils.aoa_to_sheet(summary)
+  wsSummary['!cols'] = [{ wch: 16 }, { wch: 28 }]
+  const wsGames = XLSX.utils.json_to_sheet(rows)
+  wsGames['!cols'] = [{ wch: 40 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }]
+  XLSX.utils.book_append_sheet(wb, wsSummary, '统计')
+  XLSX.utils.book_append_sheet(wb, wsGames, '游戏')
+  XLSX.writeFile(wb, `games-${ts()}.xlsx`)
 }
 
 /** Native share when available (mobile/secure context), else copy fallback. */
