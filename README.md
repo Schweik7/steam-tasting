@@ -1,54 +1,75 @@
-# 🎮 Game Tasting · Steam 玩家品味鉴定
+# 🎮 Game Tasting · 游戏生涯报告
 
-把你的 Steam 游玩历史(游戏 + 时长 + 最后游玩时间)导出成结构化数据,交给任意 OpenAI 兼容的 LLM,
-生成一份有洞察、好读、带点人情味的**玩家品味鉴定报告**:口味聚类、时间考古(白月光 vs 当下在玩)、
-投入人格、以及"你大概率会喜欢但还没碰"的精准推荐。
+把你的 Steam 游玩历史(游戏 + 时长 + 最后游玩时间)交给大模型,生成一份有洞察、好读、带点人情味的
+**玩家品味鉴定报告**:口味聚类、时间考古(回不去的白月光 vs 此刻在玩的)、投入人格,以及"你大概率会喜欢
+但还没碰"的精准推荐。填了年龄还会把每款游戏锚定到你当时的人生阶段(高中 / 大学…),让时间考古更走心。
 
-> LLM 的 Key 存在浏览器 localStorage;生成报告时由后端构建提示词并代调你填写的 LLM(用完即弃,不持久化)。
-
-获取游玩数据有两种途径:
-
-- **🎮 用 Steam 登录(推荐)**:部署带后端的版本后,用户点「用 Steam 登录」即可自动拉取自己的游戏库,
-  **无需自己申请任何 Key**。开发者只需在后端配置**一个** Steam Web API Key。需自托管 Python/FastAPI 后端,见
-  [`DEVELOPMENT.md`](./DEVELOPMENT.md)。
-- **📄 上传导出文件**:用下面的 `steam_export.py` 自己导出 `games.json` / `games.csv` 再拖入。纯静态即可用。
-
-> ⚠️ 注意:Steam OpenID 登录只做**身份认证**(拿到 SteamID),**不能替代 API Key** —— 读取游戏数据仍需
-> 一个 Steam Web API Key。区别只是「开发者出一个 key」还是「每个用户各自出 key」。详见 `DEVELOPMENT.md` 第 2 节。
+线上体验或自己部署都行。下面按**你是谁**分三种用法。
 
 ---
 
-## ✨ 功能
+## 👤 我只想生成自己的报告(大多数人看这里)
 
-- **数据导出**(`steam_export.py`):走官方 Steam Web API(`GetOwnedGames`),纯标准库、无需 pip 安装。
-  导出 `games.json` + `games.csv`,含总时长、近 2 周时长、**最后游玩日期**、平台分布。
-- **Web 分析界面**(Vite + React + TS):填 API Base / Key / 模型 → 拖入数据 → 取时长前 N 名 → **流式**生成报告。
-- **导出 / 分享**:复制 Markdown、下载 `.md`、导出自包含 `.html`、调用系统分享。
-- **可定制**:语言(中/英)、点评风格(专业幽默 / 温和鼓励 / 毒舌犀利)、Top N、temperature、盲点推荐开关。
-- **报告模板**:见 [`game_tasting_template.md`](./game_tasting_template.md),含给 AI 的高质量 System Prompt。
+如果有人已经把带后端的版本部署好了,你要做的只有:
+
+1. 打开站点,点 **「🎮 用 Steam 登录」** —— 授权后自动拉取你的游戏库,**不用申请任何 Key**。
+   (需要把 Steam 资料的「游戏详情」隐私临时设为公开,`GetOwnedGames` 才读得到;分析完可改回。)
+2. 在「① LLM 接口设置」填一个 OpenAI 兼容的 **API Base / 模型 / Key**(如 DeepSeek、OpenAI、各家中转、本地推理)。
+   —— 或者,如果你拿到了**邀请码**,填进 MagicVal 框即可直接用站点方的模型,免填上面的 API。
+3. (可选)填年龄、性别,让报告把游玩时间换算成你当时的人生阶段。
+4. 点 **「⚡ 生成品味鉴定报告」**,流式查看,随后可复制 / 下载 `.md` `.html` / 分享。
+
+> 你填的 LLM Key 只存在自己浏览器(localStorage);生成时发给站点后端代调 LLM,用完即弃、不持久化。
 
 ---
 
-## 🔧 一、导出你的 Steam 数据
+## 🛠️ 我想自己搭一套来运行(部署者看这里)
 
-需要:Python 3.8+。
+「Steam 登录」版本需要一个后端(Python/FastAPI),由它托管前端、代理 Steam、代调 LLM。
+你只需在后端配置**一个** Steam Web API Key,所有用户共用,访客无需各自申请。
+
+最小步骤:
+
+```bash
+git clone https://github.com/Schweik7/steam-tasting && cd steam-tasting
+uv sync                         # 后端依赖(uv 自带 Python)
+pnpm install && pnpm build      # 构建前端,产出 dist/(后端自动托管)
+cp .env.example .env            # 填 STEAM_API_KEY、SESSION_SECRET(墙内再填 PROXY_URL)
+uv run uvicorn server.main:app --host 127.0.0.1 --port 8787
+```
+
+- Windows / Linux 通用步骤、systemd / 服务常驻、nginx + HTTPS、代理配置 →
+  **[`deploy/README.md`](./deploy/README.md)**
+- 前端结构与开发 → [`src/README.md`](./src/README.md);后端结构与路由 → [`server/README.md`](./server/README.md)
+- 架构与设计取舍(为什么必须有后端、登录与 Key 的关系、提示词、邀请码) → [`DEVELOPMENT.md`](./DEVELOPMENT.md)
+
+> ⚠️ Steam OpenID 登录只做**身份认证**(拿到 SteamID),**不能替代 API Key** —— 读游戏数据仍需一个
+> Steam Web API Key。区别只是「部署者出一个 Key」还是「每个用户各自出 Key」。
+
+---
+
+## 📄 我只想导出自己的 Steam 游玩记录(不生成报告)
+
+用仓库里的 `steam_export.py` 即可,走官方 Steam Web API,**纯标准库、无需 pip 安装**,
+产出 `games.json` + `games.csv`(含总时长、近 2 周时长、最后游玩日期、平台分布)。
+
+需要 Python 3.8+:
 
 1. **拿一个 Steam Web API Key**(只读、可随时吊销):登录后打开
-   <https://steamcommunity.com/dev/apikey>,domain 随便填(如 `localhost`),得到 32 位十六进制 key。
-2. **把"游戏详情"隐私设为公开**(临时即可):个人资料 → 编辑资料 → 隐私设置 → 游戏详情 = 公开。
-   `GetOwnedGames` 受此设置限制,私密则返回空。分析完可改回。
+   <https://steamcommunity.com/dev/apikey>,domain 随便填(如 `localhost`),得到 32 位十六进制 Key。
+2. **把「游戏详情」隐私设为公开**(临时即可):个人资料 → 编辑资料 → 隐私设置 → 游戏详情 = 公开。
 3. 运行:
 
    ```bash
    # 用自定义 URL(steamcommunity.com/id/<vanity>)
-   python steam_export.py --key YOUR_API_KEY --vanity tensorneverflow
+   python steam_export.py --key YOUR_API_KEY --vanity your_vanity
    # 或直接用 17 位 SteamID64
    python steam_export.py --key YOUR_API_KEY --steamid 7656119XXXXXXXXXX
    ```
 
-   产出当前目录的 `games.json` 与 `games.csv`。
+导出的文件也能直接拖进 Web 界面的「上传导出文件」入口生成报告(此模式纯前端即可,无需登录)。
 
-### 能拿到什么 / 拿不到什么
+### 能拿到 / 拿不到什么
 
 | 数据 | 是否可得 |
 |---|---|
@@ -58,71 +79,28 @@
 | **逐日 / 逐年历史时长**("大一那年玩了多少") | ❌ Steam 不对外提供 |
 
 > 时间维度靠 `last_played` 近似:总时长高但很久没碰 ≈ 早期本命;最近还在玩 ≈ 当前口味。
-> 报告会重点利用这一点区分"回不去的白月光"和"现在的菜"。
-
----
-
-## 🖥️ 二、启动 Web 分析界面
-
-只想用「上传文件」模式:需要 Node 18+ 与 pnpm。
-
-```bash
-pnpm install
-pnpm dev      # 打开 http://localhost:5173
-# 或构建静态站点
-pnpm build && pnpm preview
-```
-
-想用「Steam 登录」模式:还需启动 Python/FastAPI 后端(uv 管理),完整步骤见
-[`DEVELOPMENT.md`](./DEVELOPMENT.md):
-
-```bash
-uv sync
-cp .env.example .env       # 填 STEAM_API_KEY、SESSION_SECRET(墙内再填 PROXY_URL)
-uv run uvicorn server.main:app --port 8787 --reload   # 另开一个终端跑 pnpm dev
-```
-
-界面里:
-
-1. 填 **API Base**(OpenAI 兼容,如 `https://api.openai.com/v1`、各家中转、本地推理)、**模型名**、**API Key**。
-2. **用 Steam 登录**(自动拉取游戏库),或拖入 `games.json` / `games.csv`。
-3. 点「⚡ 生成品味鉴定报告」,流式查看,随后可复制 / 下载 / 分享。
-
-> 生成报告由**后端**构建提示词并代调你填写的 LLM(因此不受浏览器跨域限制)。
-> 若 LLM 接口被墙,给后端 `.env` 配 `PROXY_URL` 即可。
 
 ---
 
 ## 📁 项目结构
 
 ```
-server/                    # Python/FastAPI 后端(Steam 登录 + Steam/LLM 代理)
-  main.py  steam.py  prompt.py  config.py
-pyproject.toml             # 后端依赖(uv)
-steam_export.py            # 备选途径:Steam 数据导出脚本(无第三方依赖)
-game_tasting_template.md   # 报告模板 + System Prompt
-legacy-standalone.html     # 早期单文件版(无需构建,留作备份)
-index.html                 # Vite 入口
-src/
-  App.tsx                  # 主界面 + 登录态
-  lib/api.ts               # 后端 API 客户端
-  lib/parse.ts             # JSON/CSV 解析与归一化
-  lib/llm.ts               # 调 /api/report 并解析流式 SSE
-  lib/exporter.ts          # 复制 / 下载 / 分享
-  hooks/useLocalStorage.ts
-  types.ts  styles.css
-.env.example               # 后端环境变量模板
+server/         # Python/FastAPI 后端(Steam 登录 + Steam/LLM 代理)  —— 见 server/README.md
+src/            # Vite + React 前端                                  —— 见 src/README.md
+deploy/         # 部署模板(systemd / nginx)与手册                  —— 见 deploy/README.md
+steam_export.py # 备选途径:Steam 数据导出脚本(无第三方依赖)
+pyproject.toml  # 后端依赖(uv)
+index.html      # Vite 入口
+.env.example    # 后端环境变量模板
+DEVELOPMENT.md  # 架构与设计文档
 ```
-
-> 自托管「Steam 登录」版本的完整步骤(环境变量、部署、安全)见 [`DEVELOPMENT.md`](./DEVELOPMENT.md)。
-
----
 
 ## 🔒 隐私
 
 - LLM 的 Key 存在浏览器 localStorage;生成报告时发给本应用后端代调 LLM,后端用完即弃、不持久化。
 - Steam Web API Key 只在后端环境变量(`.env`,已 gitignore),永不下发浏览器。
-- `games.json` / `games.csv` / `*.report.md` 含个人数据,已在 `.gitignore` 中默认忽略,不会被提交。
+- 邀请码的可接受值只存在后端,前端只拿到「有效 / 无效」结果。
+- `games.json` / `games.csv` / `*.report.md` 含个人数据,已在 `.gitignore` 默认忽略。
 
 ## 📜 License
 

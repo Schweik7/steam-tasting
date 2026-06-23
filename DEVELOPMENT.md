@@ -15,10 +15,14 @@
 1. **Steam 登录(推荐)** —— 用户点「用 Steam 登录」,经 Steam OpenID 认证后,
    后端用**开发者的一个 Steam Web API Key** 自动拉取该用户的游戏库。用户零门槛。
 2. **上传文件(备选)** —— 用户自己跑 [`steam_export.py`](./steam_export.py),
-   拖入生成的 `games.json` / `games.csv`。纯静态即可用,无需后端。
+   拖入生成的 `games.json` / `games.csv`。解析、勾选、导出都在前端完成,
+   但**生成报告仍需后端** `/api/report`(LLM 调用在后端)。
 
-> LLM 调用始终在**浏览器里直连**用户填写的 API Base,Key 只存浏览器 localStorage,
-> 不经过我们的后端。后端只负责 Steam 认证与 Steam 数据代理。
+> 报告生成由**后端**完成:浏览器把游戏数据 + LLM 设置发给 `/api/report`,后端构建
+> 提示词、代调 LLM 并把 SSE 流式转发回来。后端职责 = Steam 认证 + Steam 数据代理 + LLM 代理。
+>
+> 另有 **MagicVal 邀请码**:用户在前端填 `2016–2026` 即用后端预置的 LLM(`LLM_API_*`),
+> 无需自带 API(见 §3「MagicVal」)。
 
 ---
 
@@ -60,10 +64,13 @@
   │        └─ 后端用 server-side key 调 GetPlayerSummaries + GetOwnedGames
   │           返回 { profile, games(已归一化), gamesPrivate }
   │
-  └─ ⑤ 浏览器把 games + LLM 设置 POST 给 /api/report
-         └─ 后端用 prompt.py 构建提示词,代调用户填写的 LLM /chat/completions
+  └─ ⑤ 浏览器把 games + LLM 设置(或 MagicVal)POST 给 /api/report
+         └─ 后端用 prompt.py 构建提示词,代调 LLM /chat/completions
             (流式,经 PROXY_URL)→ 原样转发 SSE 给浏览器 → 渲染报告
 ```
+
+技术栈:前端 React 19 + Vite + TS(`src/`);后端 FastAPI + httpx,uv 管理(`server/`);
+生产由 nginx 反代 → uvicorn,uvicorn 直接托管前端 `dist/`(单一源,无 CORS)。
 
 ### OpenID 2.0 登录流程(`server/steam.py`)
 
@@ -94,6 +101,17 @@ Steam 的 `api.steampowered.com` / `steamcommunity.com` 在部分网络被墙。
 `{ games, base, model, key, topn, temp, lang, style, blind }`,构建提示词后**代用户
 调用其填写的 LLM**(因此不受浏览器跨域限制,也可经 `PROXY_URL`),把上游的 OpenAI
 风格 SSE **原样转发**给前端流式渲染。`games` 缺省时回退用会话里的 SteamID 现取。
+`age` / `gender` 也随请求传入,`prompt.py` 据出生年把每款游戏的游玩年份换算成
+人生阶段(高中 / 大学…),让「时间考古」更有代入感。
+
+### MagicVal(免 key 邀请码)
+
+校验逻辑全在后端:可接受的码值只存在 `config.MAGIC_VALUES`(`config.magic_ok()`),
+**不下发浏览器**。前端把用户输入 POST 给 `POST /api/invite`,只拿回 `{valid}` 布尔值,
+据此决定是否放行生成、显示「有效」提示并弹出彩蛋。生成时 `/api/report` 再用同一个
+`magic_ok()` 复核 `magicVal`:命中则改用后端预置的 `LLM_API_BASE` / `LLM_API_KEY` /
+`LLM_MODEL`,用户无需自带 API。**注意**:该路径消耗的是开发者自己的 LLM 额度;
+清空 `LLM_API_KEY` 即可关闭。
 
 ### 数据归一化
 
@@ -109,17 +127,18 @@ Steam 的 `api.steampowered.com` / `steamcommunity.com` 在部分网络被墙。
 server/                  # Python/FastAPI 后端(uv 管理)
   main.py                #   FastAPI 应用:路由 + SessionMiddleware + 托管 dist
   steam.py               #   OpenID 验证 + Steam Web API 调用(httpx)
-  prompt.py              #   System / User 提示词构建
-  config.py              #   load_dotenv 读取环境变量 + 启动校验
-pyproject.toml           # 后端依赖(uv)
+  prompt.py              #   System / User 提示词构建 + 人生阶段换算
+  config.py              #   load_dotenv 读取环境变量 + 启动校验 + magic_ok()
+pyproject.toml           # 后端依赖(uv);uv.lock 为锁定版本
 src/                     # 前端(Vite + React + TS)
-  App.tsx                #   主界面 + 登录态
+  App.tsx                #   主界面:登录态 / 游戏勾选 / 导出 / 生成 / 彩蛋
   lib/api.ts             #   后端 API 客户端(/api/me、登录、登出、report URL)
   lib/parse.ts           #   解析/归一化(normGame / normalizeGames / parseFile)
   lib/llm.ts             #   调 /api/report 并解析流式 SSE
-  lib/exporter.ts        #   复制 / 下载 / 分享
-  hooks/useLocalStorage.ts
+  lib/exporter.ts        #   报告复制/下载/分享 + 导出 games.json/csv/xlsx
+  hooks/useLocalStorage.ts #  设置持久化(含空值回填默认)
   types.ts  styles.css  vite-env.d.ts
+deploy/                  # 部署资产:systemd unit、nginx 配置、运维手册
 steam_export.py          # 备选途径:本地导出脚本(纯标准库)
 .env.example             # 后端环境变量模板
 vite.config.ts           # 开发期 /api 代理
@@ -146,7 +165,8 @@ cp .env.example .env        # 填 STEAM_API_KEY 与 SESSION_SECRET(墙内再填 
 | `PORT` | 后端端口,默认 `8787` |
 | `PUBLIC_URL` | **浏览器实际访问到的后端基址**,用于拼 OpenID `realm`/`return_to`。开发期填 `http://localhost:5173`(走 Vite 代理) |
 | `FRONTEND_URL` | 登录成功后跳回的地址,默认 `/` |
-| `PROXY_URL` | 可选出网代理(如 `http://127.0.0.1:7890`),墙内访问 Steam 用;服务器留空 |
+| `PROXY_URL` | 可选出网代理(如 `http://127.0.0.1:7890`),墙内访问 Steam 用;无需则留空 |
+| `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL` | MagicVal 邀请码命中时使用的后端预置 LLM;留空则禁用该路径 |
 
 开两个终端:
 
@@ -190,7 +210,18 @@ uv run uvicorn server.main:app --host 0.0.0.0 --port 8787
 | GET | `/api/auth/steam/return` | OpenID 回调,验证后写 Cookie 并跳回前端 |
 | GET | `/api/me` | 当前用户 `{profile, games, gamesPrivate}`;未登录 401 |
 | POST | `/api/logout` | 清除会话 Cookie |
-| POST | `/api/report` | 构建提示词并代调 LLM,流式转发 SSE;入参见上 |
+| POST | `/api/invite` | 校验邀请码 `{code}` → `{valid}`(可接受值仅存后端) |
+| POST | `/api/report` | 构建提示词并代调 LLM,流式转发 SSE(见下) |
+
+`/api/report` 请求体(JSON):
+
+| 字段 | 说明 |
+|---|---|
+| `games` | `Game[]`(前端归一化形状);缺省则用会话 SteamID 现取 |
+| `base` / `model` / `key` | 用户自带的 LLM 配置;命中 MagicVal 时可省略 |
+| `magicVal` | 邀请码,命中则改用后端 `LLM_API_*` |
+| `topn` / `temp` / `lang` / `style` / `blind` | 报告参数 |
+| `age` / `gender` | 可选;用于人生阶段换算 |
 
 `gamesPrivate: true` 表示登录成功但游戏库为空 —— 通常是用户的「游戏详情」隐私非公开。
 前端会提示用户改隐私后刷新。

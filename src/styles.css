@@ -293,6 +293,16 @@ a {
   font-size: 12px;
   padding: 20px;
 }
+.foot .gh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.foot .gh:hover {
+  color: var(--accent);
+}
 .egg-mask {
   position: fixed;
   inset: 0;

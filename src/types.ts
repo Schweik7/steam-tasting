@@ -35,5 +35,5 @@ export interface Settings {
   blind: boolean
   age: number // 0 = 未填;用于把游玩日期映射到人生阶段(高中/大学…)
   gender: string // '' / 男 / 女 / 其他
-  magicVal: string // 邀请码:输入 "2016–2026" 即用我方 API,无需自填
+  magicVal: string // 邀请码;有效性由后端 /api/invite 校验,有效则用我方 API
 }

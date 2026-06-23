@@ -25,3 +25,23 @@ export async function fetchMe(): Promise<MeResponse | null> {
 export async function logout(): Promise<void> {
   await fetch(`${API_BASE}/api/logout`, { method: 'POST', credentials: 'include' })
 }
+
+/**
+ * Ask the backend whether an invite code is valid. The accepted value lives
+ * only in the backend config — the frontend never knows it.
+ */
+export async function checkInvite(code: string): Promise<boolean> {
+  if (!code.trim()) return false
+  try {
+    const resp = await fetch(`${API_BASE}/api/invite`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    })
+    if (!resp.ok) return false
+    const body = await resp.json()
+    return Boolean(body.valid)
+  } catch {
+    return false
+  }
+}

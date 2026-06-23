@@ -97,6 +97,15 @@ async def logout(request: Request):
     return {"ok": True}
 
 
+# Validate an invite code server-side (the accepted value lives only in config,
+# never shipped to the browser). A valid code lets the user generate a report
+# with the developer's own LLM instead of bringing their own API key.
+@app.post("/api/invite")
+async def invite(request: Request):
+    payload = await request.json()
+    return {"valid": config.magic_ok(payload.get("code", ""))}
+
+
 # 4) Generate the tasting report. The system/user prompt is built server-side
 # (see prompt.py); the LLM call is proxied so the browser never hits the LLM
 # directly (no CORS headaches) and can also benefit from PROXY_URL.
