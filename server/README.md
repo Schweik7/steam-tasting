@@ -35,6 +35,11 @@ README.md
 | POST | `/api/poem` | 据报告写诗 `{kind,instruction?}`,邀请码下用 `LLM_MODEL_PRO` |
 | GET  | `/api/report/saved` | 当前用户已存的报告 + 两首诗(未登录 401) |
 | GET  | `/api/share/{id}` | 公开只读返回某 `share_id` 的报告 + 诗 + 昵称头像 |
+| GET  | `/api/{ADMIN_PATH}/users` | 后台用户列表;仅当 `ADMIN_PATH` 环境变量设置时挂载 |
+| GET  | `/api/{ADMIN_PATH}/user/{steamid}` | 后台:某用户报告 + 诗 + 实时游戏库 |
+
+> **后台管理**:设 `ADMIN_PATH=flyaway` 后,`/flyaway` 提供免登录的后台页(API 在
+> `/api/flyaway/*`),靠路径保密。路由按该变量动态注册,前端从 URL 取得路径段,不写死在构建产物里。
 
 ## 配置(`.env`)
 

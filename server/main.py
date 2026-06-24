@@ -328,6 +328,66 @@ async def share_view(share_id: str):
     }
 
 
+# 9) Admin console API — mounted only if ADMIN_PATH is set, under that secret
+# path. No auth (low-stakes data); the obscure URL is the only gate. The
+# frontend at /<ADMIN_PATH> derives the path from the URL, so the secret never
+# ships in the bundle — an unknown path simply 404s here.
+if config.ADMIN_PATH:
+
+    @app.get(f"/api/{config.ADMIN_PATH}/users")
+    async def admin_users():
+        return {
+            "users": [
+                {
+                    "steamid": r.steamid,
+                    "name": r.name,
+                    "avatar": r.avatar,
+                    "shareId": r.share_id,
+                    "hasReport": bool(r.report_md),
+                    "hasPoems": bool(r.poem_modern or r.poem_classic),
+                    "updatedAt": r.updated_at.isoformat(),
+                }
+                for r in db.list_reports()
+            ]
+        }
+
+    @app.get(f"/api/{config.ADMIN_PATH}/user/{{steamid}}")
+    async def admin_user(steamid: str, request: Request):
+        row = db.get_report(steamid)
+        if not row:
+            return JSONResponse({"error": "not_found"}, status_code=404)
+        # Games aren't persisted — fetch live from Steam by SteamID.
+        games: list[dict] = []
+        games_error = ""
+        try:
+            raw = await steam.get_owned_games(
+                request.app.state.http, config.STEAM_API_KEY, steamid
+            )
+            games = [
+                {
+                    "name": g["name"],
+                    "hours": g["playtime_hours"],
+                    "last_played": g["last_played"],
+                    "w2": g["playtime_2weeks_min"],
+                }
+                for g in raw
+            ]
+        except Exception as e:  # network/proxy/privacy issues shouldn't 500 the page
+            games_error = str(e)
+        return {
+            "steamid": row.steamid,
+            "name": row.name,
+            "avatar": row.avatar,
+            "shareId": row.share_id,
+            "report": row.report_md,
+            "poemModern": row.poem_modern,
+            "poemClassic": row.poem_classic,
+            "updatedAt": row.updated_at.isoformat(),
+            "games": games,
+            "gamesError": games_error,
+        }
+
+
 # --- serve the built frontend in production (single origin = no CORS) ---
 if DIST_DIR.exists():
     app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="assets")

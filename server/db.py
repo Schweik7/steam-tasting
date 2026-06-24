@@ -92,3 +92,9 @@ def get_report(steamid: str) -> Report | None:
 def get_by_share(share_id: str) -> Report | None:
     with Session(engine) as session:
         return session.exec(select(Report).where(Report.share_id == share_id)).first()
+
+
+def list_reports() -> list[Report]:
+    """All stored reports, newest first (for the admin console)."""
+    with Session(engine) as session:
+        return list(session.exec(select(Report).order_by(Report.updated_at.desc())).all())

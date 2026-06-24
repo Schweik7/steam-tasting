@@ -50,6 +50,12 @@ MAGIC_VALUES = {
 def magic_ok(value: str) -> bool:
     return (value or "").strip() in MAGIC_VALUES
 
+
+# Admin console: if set, an unauthenticated, obscure-URL admin view is mounted
+# at /<ADMIN_PATH> with its API under /api/<ADMIN_PATH>/*. Security is purely
+# the secrecy of the path (this is low-stakes data). Empty = admin disabled.
+ADMIN_PATH: str = os.getenv("ADMIN_PATH", "").strip().strip("/")
+
 # True when serving over HTTPS -> session cookie gets the Secure flag.
 COOKIE_SECURE: bool = PUBLIC_URL.startswith("https://")
 

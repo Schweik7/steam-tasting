@@ -48,6 +48,54 @@ export async function fetchShare(id: string): Promise<ShareData | null> {
 /** Absolute, shareable URL for a given share id. */
 export const shareLink = (id: string) => `${window.location.origin}/s/${id}`
 
+// --- admin console (path is a secret env var; the frontend derives it from
+// the URL it was opened at, so it's never hard-coded in the bundle) ---
+
+export interface AdminUser {
+  steamid: string
+  name: string
+  avatar: string
+  shareId: string
+  hasReport: boolean
+  hasPoems: boolean
+  updatedAt: string
+}
+
+export interface AdminGame {
+  name: string
+  hours: number
+  last_played: string
+  w2: number
+}
+
+export interface AdminDetail {
+  steamid: string
+  name: string
+  avatar: string
+  shareId: string
+  report: string
+  poemModern: string
+  poemClassic: string
+  updatedAt: string
+  games: AdminGame[]
+  gamesError: string
+}
+
+/** List all stored users, or null if this path isn't the admin path (404). */
+export async function adminListUsers(path: string): Promise<AdminUser[] | null> {
+  const resp = await fetch(`${API_BASE}/api/${encodeURIComponent(path)}/users`)
+  if (!resp.ok) return null
+  const body = await resp.json().catch(() => ({}))
+  return body.users ?? []
+}
+
+/** One user's full detail (report + poems + live games), or null. */
+export async function adminGetUser(path: string, steamid: string): Promise<AdminDetail | null> {
+  const resp = await fetch(`${API_BASE}/api/${encodeURIComponent(path)}/user/${steamid}`)
+  if (!resp.ok) return null
+  return resp.json()
+}
+
 /** Fetch the logged-in user + their games, or null if not authenticated. */
 export async function fetchMe(): Promise<MeResponse | null> {
   const resp = await fetch(`${API_BASE}/api/me`, { credentials: 'include' })

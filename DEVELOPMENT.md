@@ -190,6 +190,7 @@ cp .env.example .env        # 填 STEAM_API_KEY 与 SESSION_SECRET(墙内再填 
 | `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL` | 邀请码命中时使用的后端预置 LLM;留空则禁用该路径 |
 | `LLM_MODEL_PRO` | 邀请码路径下写诗用的更强模型,默认 `deepseek-v4-pro` |
 | `DATABASE_URL` | 选填;持久化报告/诗的数据库,默认 `data/steam-tasting.db`(SQLite) |
+| `ADMIN_PATH` | 选填;设置后在 `/<ADMIN_PATH>` 开放免登录后台(API 在 `/api/<ADMIN_PATH>/*`),靠路径保密;留空禁用 |
 
 开两个终端:
 
@@ -239,6 +240,13 @@ uv run uvicorn server.main:app --host 0.0.0.0 --port 8787
 | POST | `/api/poem` | 据报告写诗 `{kind:'modern'\|'classic', instruction?}`,邀请码用 pro 模型 |
 | GET | `/api/report/saved` | 当前用户已存的报告 + 两首诗;未登录 401 |
 | GET | `/api/share/{id}` | 公开只读返回某 `share_id` 的报告 + 诗 + 昵称头像 |
+| GET | `/api/{ADMIN_PATH}/users` | 后台:全部用户列表(仅 `ADMIN_PATH` 配置时挂载) |
+| GET | `/api/{ADMIN_PATH}/user/{steamid}` | 后台:某用户的报告 + 诗 + 实时游戏库 |
+
+> **后台管理**:`ADMIN_PATH` 配置后,在 `/<ADMIN_PATH>`(如 `/flyaway`)挂载一个**免登录**后台,
+> 列出所有生成过报告的用户,点开看其游戏库(按 SteamID 实时拉取)、报告与两首诗。路由按 `ADMIN_PATH`
+> **动态注册**;前端在该路径下从 URL 自身取得这个段去调 `/api/<段>/*`,因此**密钥不进前端构建产物**——
+> 访问其它路径时后端直接 404,前端显示「页面不存在」。安全性仅靠路径保密,适合低敏感数据。
 
 `/api/report` 请求体(JSON):
 
