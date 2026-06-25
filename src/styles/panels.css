@@ -130,9 +130,9 @@
 
 /* admin console */
 .wrap.admin {
-  max-width: 1100px;
+  max-width: 1160px;
   display: grid;
-  grid-template-columns: minmax(280px, 360px) 1fr;
+  grid-template-columns: minmax(260px, 340px) 1fr;
   gap: 14px;
   align-items: start;
 }
@@ -144,23 +144,98 @@
 .admin-list,
 .admin-detail {
   margin: 0;
+  min-width: 0; /* let children shrink instead of overflowing the column */
 }
-.admin-list .preview tr.sel td {
-  background: #11202b;
+.admin-detail {
+  overflow: hidden;
 }
-.admin .urow {
+
+/* left: vertical user list */
+.ulist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 72vh;
+  overflow-y: auto;
+}
+.uitem {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  text-align: left;
+  background: var(--panel2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-weight: 400;
+  cursor: pointer;
 }
-.admin .uavatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+.uitem:hover {
+  border-color: var(--accent);
+  filter: none;
 }
+.uitem.sel {
+  border-color: var(--accent);
+  background: #11202b;
+}
+.uitem .uavatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.uavatar-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel);
+  font-size: 18px;
+}
+.uinfo {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.uname,
+.usteam {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.usteam {
+  margin-top: 0;
+}
+.umeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.ubadges {
+  display: flex;
+  gap: 4px;
+  font-size: 14px;
+}
+.udate {
+  margin-top: 0;
+  font-size: 11px;
+}
+
+/* right: detail */
 .admin-detail .report {
   margin-top: 10px;
 }
 .admin-detail details {
   margin-top: 12px;
+}
+.admin-detail .preview {
+  display: block;
+  max-height: 320px;
+  overflow: auto;
 }

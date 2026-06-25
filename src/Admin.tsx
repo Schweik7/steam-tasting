@@ -49,47 +49,35 @@ export default function Admin({ path }: { path: string }) {
       <div className="wrap admin">
         <section className="card admin-list">
           <h2>用户列表</h2>
-          <table className="preview">
-            <thead>
-              <tr>
-                <th>用户</th>
-                <th>报告</th>
-                <th>诗</th>
-                <th>更新时间</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users?.map((u) => (
-                <tr
-                  key={u.steamid}
-                  className={sel?.steamid === u.steamid ? 'sel' : ''}
-                  onClick={() => open(u.steamid)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <td>
-                    <span className="urow">
-                      {u.avatar && <img src={u.avatar} alt="" className="uavatar" />}
-                      <span>
-                        <b>{u.name || '(未知)'}</b>
-                        <br />
-                        <span className="hint">{u.steamid}</span>
-                      </span>
-                    </span>
-                  </td>
-                  <td>{u.hasReport ? '✅' : '—'}</td>
-                  <td>{u.hasPoems ? '✅' : '—'}</td>
-                  <td className="hint">{new Date(u.updatedAt).toLocaleString()}</td>
-                </tr>
-              ))}
-              {users?.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="hint">
-                    还没有任何用户生成报告。
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          <div className="ulist">
+            {users?.map((u) => (
+              <button
+                key={u.steamid}
+                className={'uitem' + (sel?.steamid === u.steamid ? ' sel' : '')}
+                onClick={() => open(u.steamid)}
+              >
+                {u.avatar ? (
+                  <img src={u.avatar} alt="" className="uavatar" />
+                ) : (
+                  <span className="uavatar uavatar-ph">🎮</span>
+                )}
+                <span className="uinfo">
+                  <b className="uname">{u.name || '(未知)'}</b>
+                  <span className="hint usteam">{u.steamid}</span>
+                </span>
+                <span className="umeta">
+                  <span className="ubadges">
+                    <span title="报告">{u.hasReport ? '📄' : '·'}</span>
+                    <span title="诗">{u.hasPoems ? '🪶' : '·'}</span>
+                  </span>
+                  <span className="hint udate">
+                    {new Date(u.updatedAt).toLocaleDateString()}
+                  </span>
+                </span>
+              </button>
+            ))}
+            {users?.length === 0 && <p className="hint">还没有任何用户生成报告。</p>}
+          </div>
         </section>
 
         <section className="card admin-detail">
