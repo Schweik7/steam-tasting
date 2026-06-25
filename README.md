@@ -116,4 +116,4 @@ DEVELOPMENT.md  # 架构与设计文档
 
 ## 📜 License
 
-MIT
+MIT,见 [`LICENSE`](./LICENSE)。
